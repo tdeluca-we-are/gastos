@@ -271,7 +271,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
    sin tocar la nube.
    ============================================================ */
 
-const VERSION_APP = '1.0';
+const VERSION_APP = '1.1';
 const SB_URL  = 'https://ojzcxwhoinmljospgmfp.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qemN4d2hvaW5tbGpvc3BnbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDY5MTYsImV4cCI6MjA5MzQ4MjkxNn0.jmvVP3weuclrBpQJb57BwmHD77Ofy4CDe43cnmiSFCk';
 const DEMO = /[?&]demo\b/.test(location.search);
@@ -415,41 +415,71 @@ function marcarSync(estado){
     (estado === 'choque' ? ' onclick="resolverChoque()" title="Ver qué hacer"' : '')+
     '><i></i>'+M[1]+'</span>';
 }
+// BASE = copia de lo último que sé que está en la nube. Sirve para darme cuenta de
+// si lo que cambió allá lo hizo solo el bot de WhatsApp (y entonces mezclo sin preguntar).
+let BASE = null;
+function estable(o){
+  if(Array.isArray(o)) return '[' + o.map(estable).join(',') + ']';
+  if(o && typeof o === 'object') return '{' + Object.keys(o).sort().map(k => JSON.stringify(k) + ':' + estable(o[k])).join(',') + '}';
+  return JSON.stringify(o);
+}
 function subir(){
   if(!UID || !sb) return;
   clearTimeout(reintento);
   marcarSync('va');
-  const nueva = VERSION + 1;
+  const nueva = VERSION + 1, enviado = JSON.parse(JSON.stringify(S));
   sb.from(TABLA)
-    .update({datos:S, version:nueva, actualizado:new Date().toISOString()})
+    .update({datos:enviado, version:nueva, actualizado:new Date().toISOString()})
     .eq('user_id', UID).eq('version', VERSION).select('version')
     .then(function(r){
       if(r.error){ marcarSync('mal'); reintento = setTimeout(subir, 8000); return; }
-      if(!r.data || !r.data.length){ marcarSync('choque'); return; }
-      VERSION = nueva; guardarLocal(false); marcarSync('ok');
+      if(!r.data || !r.data.length){ fusionarBot(); return; }
+      VERSION = nueva; BASE = enviado; guardarLocal(false); marcarSync('ok');
     }, function(){ marcarSync('mal'); reintento = setTimeout(subir, 8000); });
+}
+// Otro lado guardó primero. Si fue el bot (solo agregó o borró movimientos de WhatsApp),
+// sumo sus cambios a lo de esta pantalla y vuelvo a subir; si no, pregunto.
+function fusionarBot(){
+  sb.from(TABLA).select('datos,version').eq('user_id', UID).maybeSingle().then(function(r){
+    if(!r.data || !BASE){ marcarSync('choque'); return; }
+    const R = normalizar(r.data.datos), B = normalizar(BASE);
+    const sinMovs = d => estable(Object.assign({}, d, {movs: null}));
+    if(sinMovs(R) !== sinMovs(B)){ marcarSync('choque'); return; }
+    const bm = new Map(B.movs.map(x => [x.id, x])), rm = new Map(R.movs.map(x => [x.id, x]));
+    const agregados = R.movs.filter(x => !bm.has(x.id)), borrados = B.movs.filter(x => !rm.has(x.id));
+    const tocados = R.movs.filter(x => bm.has(x.id) && estable(bm.get(x.id)) !== estable(x));
+    if(tocados.length || agregados.some(x => x.origen !== 'wpp') || borrados.some(x => x.origen !== 'wpp')){ marcarSync('choque'); return; }
+    const ids = new Set(S.movs.map(x => x.id)), fuera = new Set(borrados.map(x => x.id));
+    S.movs = S.movs.filter(x => !fuera.has(x.id)).concat(agregados.filter(x => !ids.has(x.id)));
+    VERSION = r.data.version; BASE = r.data.datos;
+    render(); subir();
+    if(agregados.length) toast('💬 Llegó '+agregados.length+' gasto'+(agregados.length > 1 ? 's' : '')+' de WhatsApp');
+  }, function(){ marcarSync('choque'); });
 }
 function resolverChoque(){
   const q = 'Se guardaron cambios desde otro dispositivo, así que no piso nada sin preguntarte.\n\n'+
     'Aceptar: traigo lo de la nube y pierdo lo que cargaste acá desde entonces.\n'+
     'Cancelar: subo lo de esta pantalla y piso lo otro.';
   if(confirm(q)) location.reload();
-  else sb.from(TABLA).select('version').eq('user_id', UID).maybeSingle()
-        .then(r => { if(r.data){ VERSION = r.data.version; subir(); } });
+  else sb.from(TABLA).select('datos,version').eq('user_id', UID).maybeSingle()
+        .then(r => { if(r.data){ VERSION = r.data.version; BASE = r.data.datos; subir(); } });
 }
 window.addEventListener('online', () => { if(sincro === 'mal') subir(); });
-// Al volver a la app (p. ej. desde el celu) traigo lo último si no hay nada pendiente
-document.addEventListener('visibilitychange', () => {
+// Traigo lo último (p. ej. lo que cargó el bot) al volver a la app y cada tanto mientras está abierta
+function refrescar(){
   if(document.visibilityState !== 'visible' || !UID || !sb) return;
   if(sincro === 'mal'){ subir(); return; }
   if(sincro !== 'ok' || document.getElementById('sheet').classList.contains('on')) return;
   sb.from(TABLA).select('datos,version').eq('user_id', UID).maybeSingle().then(r => {
-    if(r.data && r.data.version > VERSION && sincro === 'ok'){
-      S = normalizar(r.data.datos); VERSION = r.data.version; guardarLocal(false); render();
-      toast('🔄 Actualizado con lo último');
+    if(r.data && r.data.version > VERSION && sincro === 'ok' && !document.getElementById('sheet').classList.contains('on')){
+      const antes = S.movs.length;
+      S = normalizar(r.data.datos); VERSION = r.data.version; BASE = r.data.datos; guardarLocal(false); render();
+      toast(S.movs.length > antes ? '💬 Llegaron gastos nuevos' : '🔄 Actualizado con lo último');
     }
   });
-});
+}
+document.addEventListener('visibilitychange', refrescar);
+setInterval(refrescar, 30000);
 
 /* ---------- toast ---------- */
 let _toast = null;
@@ -572,7 +602,7 @@ function kpi(e, bg, l, v, s){
 function filaMov(x, sinFecha){
   const c = catDe(x.t, x.cat);
   return '<div class="mov" onclick="editarMov(\''+x.id+'\')"><span class="ico" style="background:'+c.c+'22">'+c.e+'</span>'+
-    '<div class="mt"><b>'+esc(x.desc || c.n)+'</b><small>'+esc(c.n)+(sinFecha ? '' : ' · '+fechaLarga(x.fecha))+'</small></div>'+
+    '<div class="mt"><b>'+esc(x.desc || c.n)+'</b><small>'+esc(c.n)+(sinFecha ? '' : ' · '+fechaLarga(x.fecha))+(x.origen === 'wpp' ? ' · 💬' : '')+'</small></div>'+
     '<span class="mm '+x.t+'">'+(x.t === 'g' ? '-' : '+')+plata(x.monto)+'</span></div>';
 }
 
@@ -914,6 +944,8 @@ function guardarMov(){
   if(!(monto > 0)) { toast('Poné un monto 💵'); const i = document.getElementById('f-monto'); if(i) i.focus(); return; }
   if(!/^\d{4}-\d{2}-\d{2}$/.test(F.fecha || '')) return toast('Elegí una fecha 📅');
   const x = {id: F.id || uid(), t: F.t, monto, cat: F.cat, fecha: F.fecha, desc: (F.desc || '').trim(), ts: F.ts || Date.now()};
+  if(F.origen) x.origen = F.origen;
+  if(F.wid) x.wid = F.wid;
   const i = S.movs.findIndex(m => m.id === x.id);
   if(i >= 0) S.movs[i] = x; else S.movs.push(x);
   save(); cerrarSheet();
@@ -1055,7 +1087,7 @@ function arrancar(){
         mostrarLogin(); return;
       }
       if(!r.data){ primeraVez(); return; }
-      S = normalizar(r.data.datos); VERSION = r.data.version;
+      S = normalizar(r.data.datos); VERSION = r.data.version; BASE = r.data.datos;
       const meta = leerMeta(), local = leerLocal();
       if(meta.pendiente && local && tieneContenido(local) && meta.version >= VERSION){
         if(confirm('Quedaron cambios en este dispositivo que nunca llegaron a la nube.\n\nAceptar: los subo.\nCancelar: uso lo de la nube y descarto lo local.')){
@@ -1070,7 +1102,7 @@ function primeraVez(){
   S = estadoVacio();
   sb.from(TABLA).insert({user_id: UID, datos: S, version: 1}).select('version').then(function(r){
     if(r.error){ alert('No pude crear tu registro en la nube: ' + r.error.message); return; }
-    VERSION = 1; guardarLocal(false); abrirApp(); marcarSync('ok');
+    VERSION = 1; BASE = JSON.parse(JSON.stringify(S)); guardarLocal(false); abrirApp(); marcarSync('ok');
     toast('🎉 ¡Listo! Ya guarda en la nube');
   });
 }
