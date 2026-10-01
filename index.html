@@ -271,7 +271,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
    sin tocar la nube.
    ============================================================ */
 
-const VERSION_APP = '1.1';
+const VERSION_APP = '1.2';
 const SB_URL  = 'https://ojzcxwhoinmljospgmfp.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qemN4d2hvaW5tbGpvc3BnbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDY5MTYsImV4cCI6MjA5MzQ4MjkxNn0.jmvVP3weuclrBpQJb57BwmHD77Ofy4CDe43cnmiSFCk';
 const DEMO = /[?&]demo\b/.test(location.search);
@@ -424,7 +424,7 @@ function estable(o){
   return JSON.stringify(o);
 }
 function subir(){
-  if(!UID || !sb) return;
+  if(!UID || !sb || !CARGADO) return;
   clearTimeout(reintento);
   marcarSync('va');
   const nueva = VERSION + 1, enviado = JSON.parse(JSON.stringify(S));
@@ -467,7 +467,7 @@ function resolverChoque(){
 window.addEventListener('online', () => { if(sincro === 'mal') subir(); });
 // Traigo lo último (p. ej. lo que cargó el bot) al volver a la app y cada tanto mientras está abierta
 function refrescar(){
-  if(document.visibilityState !== 'visible' || !UID || !sb) return;
+  if(document.visibilityState !== 'visible' || !UID || !sb || !CARGADO) return;
   if(sincro === 'mal'){ subir(); return; }
   if(sincro !== 'ok' || document.getElementById('sheet').classList.contains('on')) return;
   sb.from(TABLA).select('datos,version').eq('user_id', UID).maybeSingle().then(r => {
@@ -1068,12 +1068,16 @@ function salir(){
   if((sincro === 'va' || sincro === 'mal') && !confirm('Hay cambios sin terminar de guardar. ¿Salir igual?')) return;
   sb.auth.signOut().then(() => location.reload());
 }
-function arrancar(){
+// RAPIDO = la app ya está mostrando lo guardado en este dispositivo mientras trae lo de la nube.
+// CARGADO = ya tengo la versión de la nube; hasta entonces no subo nada.
+let RAPIDO = false, CARGADO = false, _reArr = null;
+function arrancar(u){
   if(!sb){
     errAuth('No se pudo cargar la librería de Supabase. Revisá la conexión y recargá.');
     mostrarLogin(); return;
   }
-  sb.auth.getUser().then(function(ru){
+  clearTimeout(_reArr);
+  (u ? Promise.resolve({data: {user: u}}) : sb.auth.getUser()).then(function(ru){
     const u = ru.data && ru.data.user;
     if(!u){ mostrarLogin(); return; }
     UID = u.id; MAIL = u.email || '';
@@ -1081,28 +1085,40 @@ function arrancar(){
     sb.from(TABLA).select('datos,version').eq('user_id', UID).maybeSingle().then(function(r){
       if(r.error){
         const faltaTabla = r.error.code === 'PGRST205' || /could not find the table|relation .* does not exist/i.test(r.error.message || '');
+        const sesionVencida = r.error.code === 'PGRST301' || /jwt/i.test(r.error.message || '');
+        if(RAPIDO && !faltaTabla && !sesionVencida){ sinConexion(); return; }
+        if(sesionVencida){ errAuth('Tu sesión venció, volvé a entrar.'); mostrarLogin(); return; }
         errAuth(faltaTabla
           ? 'Falta crear la tabla en Supabase: corré gastos-schema.sql en el SQL editor y volvé a entrar.'
           : 'Entraste, pero no pude leer tus datos: ' + r.error.message);
         mostrarLogin(); return;
       }
       if(!r.data){ primeraVez(); return; }
-      S = normalizar(r.data.datos); VERSION = r.data.version; BASE = r.data.datos;
+      const nube = normalizar(r.data.datos);
+      VERSION = r.data.version; BASE = r.data.datos; CARGADO = true;
       const meta = leerMeta(), local = leerLocal();
-      if(meta.pendiente && local && tieneContenido(local) && meta.version >= VERSION){
-        if(confirm('Quedaron cambios en este dispositivo que nunca llegaron a la nube.\n\nAceptar: los subo.\nCancelar: uso lo de la nube y descarto lo local.')){
+      if(meta.pendiente && local && tieneContenido(local)){
+        // cambios hechos en este dispositivo que no llegaron a la nube
+        if(meta.version >= VERSION){ S = local; abrirApp(); saveNow(); return; }       // la nube no cambió: subo sin preguntar
+        if(confirm('Hay cambios en este dispositivo que no llegaron a la nube, y mientras tanto se guardó algo desde otro lado.\n\nAceptar: subo los de acá (pisan lo otro).\nCancelar: uso lo de la nube.')){
           S = local; abrirApp(); saveNow(); return;
         }
       }
-      abrirApp(); guardarLocal(false);
-    });
-  });
+      S = nube; abrirApp(); guardarLocal(false);
+    }, sinConexion);
+  }, sinConexion);
+}
+function sinConexion(){
+  if(!RAPIDO){ errAuth('No hay conexión. Revisá internet y recargá.'); mostrarLogin(); return; }
+  const el = document.getElementById('sync');
+  if(el) el.innerHTML = '<span class="sync mal"><i></i>Sin conexión</span>';
+  clearTimeout(_reArr); _reArr = setTimeout(() => arrancar(), 10000);
 }
 function primeraVez(){
   S = estadoVacio();
   sb.from(TABLA).insert({user_id: UID, datos: S, version: 1}).select('version').then(function(r){
     if(r.error){ alert('No pude crear tu registro en la nube: ' + r.error.message); return; }
-    VERSION = 1; BASE = JSON.parse(JSON.stringify(S)); guardarLocal(false); abrirApp(); marcarSync('ok');
+    VERSION = 1; CARGADO = true; BASE = JSON.parse(JSON.stringify(S)); guardarLocal(false); abrirApp(); marcarSync('ok');
     toast('🎉 ¡Listo! Ya guarda en la nube');
   });
 }
@@ -1150,7 +1166,14 @@ function datosDemo(){
 }
 
 if(DEMO){ S = datosDemo(); abrirApp(); }
-else if(sb) sb.auth.getSession().then(r => { r.data.session ? arrancar() : mostrarLogin(); });
+else if(sb) sb.auth.getSession().then(r => {
+  const ses = r.data.session;
+  if(!ses){ mostrarLogin(); return; }
+  // ya entraste alguna vez en este dispositivo: muestro lo último guardado al instante y sincronizo por detrás
+  const local = leerLocal();
+  if(local){ S = local; VERSION = leerMeta().version || 0; RAPIDO = true; abrirApp(); document.getElementById('sync').innerHTML = '<span class="sync va"><i></i>Sincronizando…</span>'; }
+  arrancar(ses.user);
+});
 else arrancar();
 </script>
 </body>
