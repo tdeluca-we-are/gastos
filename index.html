@@ -74,6 +74,8 @@ nav.tabs{display:flex;gap:6px;max-width:1080px;margin:10px auto 0}
 nav.tabs button{padding:8px 14px;border-radius:999px;font-weight:800;color:var(--mu);font-size:14px;white-space:nowrap}
 nav.tabs button.on{background:var(--tx);color:var(--bg)}
 nav.tabs button .em{margin-right:4px}
+nav.tabs .sh{display:none}
+@media (max-width:760px){nav.tabs .sh{display:inline}}
 
 main{max-width:1080px;margin:0 auto;padding:8px 16px 120px}
 @media (min-width:761px){header{background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}}
@@ -87,6 +89,10 @@ main{max-width:1080px;margin:0 auto;padding:8px 16px 120px}
   .mesnav b{min-width:112px;font-size:14px}
   .hd .sync{order:2}
   .hd .mesnav{order:3;width:100%;justify-content:space-between}
+  nav.tabs button{padding:4px 2px;font-size:10.5px}
+  nav.tabs .lg{display:none}
+  .hero .mood{font-size:40px;right:14px;top:12px}
+  .hero .big{font-size:34px}
 }
 
 /* ---------- building blocks ---------- */
@@ -105,6 +111,11 @@ main{max-width:1080px;margin:0 auto;padding:8px 16px 120px}
 
 .hero{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border-radius:26px;padding:22px 20px;box-shadow:0 10px 30px rgba(37,99,235,.25);position:relative;overflow:hidden}
 .hero.neg{background:linear-gradient(135deg,#e11d48,#f97316)}
+.hero.ok{background:linear-gradient(135deg,#16a34a,#0d9488);box-shadow:0 10px 30px rgba(22,163,74,.25)}
+.meta+.meta{border-top:1px solid var(--ln);margin-top:14px;padding-top:14px}
+.meta .mt b{white-space:normal}
+.btn{white-space:nowrap}
+@media (max-width:760px){main .hero .mood{font-size:38px;right:14px;top:12px}main .hero .big{font-size:32px;padding-right:44px}}
 .hero .lbl{opacity:.85;font-weight:700;font-size:14px;padding-right:66px}
 .hero .sub{padding-right:4px}
 .hero .big{font-size:40px;font-weight:900;letter-spacing:-1px;line-height:1.1;margin:4px 0 10px}
@@ -271,7 +282,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
    sin tocar la nube.
    ============================================================ */
 
-const VERSION_APP = '1.2';
+const VERSION_APP = '1.3';
 const SB_URL  = 'https://ojzcxwhoinmljospgmfp.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qemN4d2hvaW5tbGpvc3BnbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDY5MTYsImV4cCI6MjA5MzQ4MjkxNn0.jmvVP3weuclrBpQJb57BwmHD77Ofy4CDe43cnmiSFCk';
 const DEMO = /[?&]demo\b/.test(location.search);
@@ -303,7 +314,8 @@ const mkCats = L => L.map(c => ({id:c[0], e:c[1], n:c[2], c:c[3], p:0}));
 
 function estadoVacio(){
   return {v:1, movs:[], fijos:[], cats:mkCats(CATS_G), catsI:mkCats(CATS_I),
-    plan:{meses:12, infl:2.5, aumIng:2, ahorro:0, gastoVar:'', ingVar:'', recorte:0}, extras:[]};
+    plan:{meses:12, infl:2.5, aumIng:2, ahorro:'', gastoVar:'', ingVar:'', recorte:0}, extras:[],
+    ahorro:{inicial:0, desde:'', ajustes:[], metas:[]}};
 }
 function normalizar(d){
   const b = estadoVacio();
@@ -315,7 +327,11 @@ function normalizar(d){
     cats:   Array.isArray(d.cats) && d.cats.length ? d.cats : b.cats,
     catsI:  Array.isArray(d.catsI) && d.catsI.length ? d.catsI : b.catsI,
     plan:   Object.assign(b.plan, d.plan || {}),
-    extras: Array.isArray(d.extras) ? d.extras : []
+    extras: Array.isArray(d.extras) ? d.extras : [],
+    ahorro: Object.assign(b.ahorro, d.ahorro || {}, {
+      ajustes: Array.isArray(d.ahorro && d.ahorro.ajustes) ? d.ahorro.ajustes : [],
+      metas:   Array.isArray(d.ahorro && d.ahorro.metas) ? d.ahorro.metas : []
+    })
   };
 }
 
@@ -578,8 +594,8 @@ function barrasProy(rows){
    Vistas
    ============================================================ */
 const TABS = [
-  ['resumen','📊','Resumen'], ['movs','🧾','Movimientos'], ['fijos','📌','Fijos'],
-  ['proy','🔮','Proyección'], ['ajustes','⚙️','Ajustes']
+  ['resumen','📊','Resumen'], ['movs','🧾','Movimientos','Movs'], ['fijos','📌','Fijos'],
+  ['ahorros','🐷','Ahorros'], ['proy','🔮','Proyección','Futuro'], ['ajustes','⚙️','Ajustes']
 ];
 function irTab(t){ TAB = t; render(); window.scrollTo(0, 0); }
 function irMes(m){ MES = m; render(); }
@@ -587,11 +603,11 @@ function moverMes(k){ MES = mesSum(MES, k); render(); }
 
 function render(){
   document.getElementById('tabs').innerHTML = TABS.map(t =>
-    '<button class="'+(TAB === t[0] ? 'on' : '')+'" onclick="irTab(\''+t[0]+'\')"><span class="em">'+t[1]+'</span>'+t[2]+'</button>').join('');
+    '<button class="'+(TAB === t[0] ? 'on' : '')+'" onclick="irTab(\''+t[0]+'\')"><span class="em">'+t[1]+'</span><span class="lg">'+t[2]+'</span><span class="sh">'+(t[3] || t[2])+'</span></button>').join('');
   document.getElementById('mes-lbl').textContent = (MES === mesActual() ? '📅 ' : '') + mesLabel(MES);
-  document.getElementById('mesnav').classList.toggle('hide', TAB === 'proy' || TAB === 'ajustes');
+  document.getElementById('mesnav').classList.toggle('hide', TAB === 'proy' || TAB === 'ajustes' || TAB === 'ahorros');
   document.getElementById('fab').classList.toggle('hide', TAB === 'ajustes');
-  const V = {resumen: vResumen, movs: vMovs, fijos: vFijos, proy: vProy, ajustes: vAjustes}[TAB];
+  const V = {resumen: vResumen, movs: vMovs, fijos: vFijos, ahorros: vAhorros, proy: vProy, ajustes: vAjustes}[TAB];
   document.getElementById('view').innerHTML = V();
   if(TAB === 'proy') pintarProy();
 }
@@ -757,7 +773,7 @@ function proyectar(){
   const gvBase = P.gastoVar !== '' && P.gastoVar != null && !isNaN(parseMonto(P.gastoVar)) ? parseMonto(P.gastoVar) : b.gv;
   const ivBase = P.ingVar !== '' && P.ingVar != null && !isNaN(parseMonto(P.ingVar)) ? parseMonto(P.ingVar) : b.iv;
   const gv = gvBase * (1 - (+P.recorte || 0) / 100);
-  const inicio = parseMonto(P.ahorro) || 0;
+  const inicio = parseMonto(P.ahorro) || ahorroInfo().total;  // vacío = lo calculado en 🐷 Ahorros
   let saldo = inicio;
   const rows = [];
   for(let k = 1; k <= (+P.meses || 12); k++){
@@ -783,7 +799,7 @@ function vProy(){
     '<div class="card"><h2>📋 Mes a mes</h2><div class="tscroll" id="proy-tabla"></div></div>'+
     '</div><div class="stack">'+
     '<div class="card"><h2>🎛️ Supuestos</h2>'+
-    '<label class="lb">🏦 Cuánta plata tenés ahorrada hoy</label>'+num('ahorro','0')+
+    '<label class="lb">🏦 Cuánta plata tenés ahorrada hoy <span style="font-weight:600">(vacío = lo de 🐷 Ahorros: '+plata(ahorroInfo().total)+')</span></label>'+num('ahorro', plata(ahorroInfo().total))+
     '<div class="row"><div><label class="lb">🔥 Inflación mensual %</label>'+num('infl','2.5')+'</div><div><label class="lb">📈 Aumento ingresos %/mes</label>'+num('aumIng','2')+'</div></div>'+
     '<label class="lb">⏳ Horizonte</label><div class="seg">'+[6,12,24].map(n => '<button class="'+(+P.meses === n ? 'on' : '')+'" onclick="S.plan.meses='+n+';save();render()">'+n+' meses</button>').join('')+'</div>'+
     '<label class="lb">🛍️ Gasto variable por mes <span style="font-weight:600">(vacío = '+esc(b.fuente)+': '+plata(b.gv)+')</span></label>'+num('gastoVar', plata(b.gv))+
@@ -822,6 +838,203 @@ function pintarProy(){
   document.getElementById('proy-tabla').innerHTML = '<table class="t"><tr><th>Mes</th><th>Ingresos</th><th>Gastos</th><th>Ahorro</th><th>Acumulado</th></tr>'+
     rows.map(r => '<tr><td>'+(r.ex.length ? '⭐ ' : '')+mesCorto(r.m, true)+'</td><td>'+corto(r.ing)+'</td><td>'+corto(r.gas)+'</td><td class="'+(r.bal >= 0 ? 'pos' : 'neg')+'">'+corto(r.bal)+'</td><td class="'+(r.saldo >= 0 ? '' : 'neg')+'">'+corto(r.saldo)+'</td></tr>').join('')+'</table>';
 }
+
+/* ----- 🐷 Ahorros ----- */
+// Lo ahorrado se calcula solo: punto de partida + lo que sobró cada mes (ingresos - gastos)
+// + ajustes a mano (intereses, retiros). Las metas reparten ese total en "apartados".
+function primerMes(){
+  const ms = S.movs.map(x => x.fecha.slice(0,7)).sort();
+  return ms[0] || mesActual();
+}
+function aportadoMeta(mt){ return suma(mt.aportes || [], a => a.monto); }
+function ahorroInfo(){
+  const A = S.ahorro, act = mesActual();
+  let desde = /^\d{4}-\d{2}$/.test(A.desde || '') ? A.desde : primerMes();
+  if(desde > act) desde = act;
+  const ajMes = m => suma(A.ajustes.filter(a => a.fecha.slice(0,7) === m), a => a.monto);
+  // ajustes anteriores al punto de partida cuentan como parte del saldo inicial
+  let cerrado = (parseMonto(A.inicial) || 0) + suma(A.ajustes.filter(a => a.fecha.slice(0,7) < desde), a => a.monto);
+  const pts = [];
+  for(let m = desde, n = 0; m < act && n < 240; m = mesSum(m, 1), n++){
+    const t = totales(m), aj = ajMes(m);
+    cerrado += t.b + aj;
+    pts.push({m, b: t.b, i: t.i, aj, saldo: cerrado});
+  }
+  const tAct = totales(act), ajAct = ajMes(act);
+  const total = cerrado + ajAct;                       // lo que tenés hoy sin contar el mes en curso
+  const recientes = pts.slice(-6);
+  const prom = recientes.length ? suma(recientes, p => p.b) / recientes.length : tAct.b;
+  const ingRec = suma(recientes, p => p.i);
+  const tasa = ingRec ? suma(recientes, p => p.b) / ingRec * 100 : 0;
+  const mejor = pts.reduce((a, p) => !a || p.b > a.b ? p : a, null);
+  const enMetas = suma(A.metas, aportadoMeta);
+  return {desde, pts, total, enCurso: tAct.b, prom, tasa, mejor, enMetas, libre: total - enMetas};
+}
+
+function lineaAhorro(pts){
+  if(pts.length < 2) return '<div class="vacio">Cuando cierren un par de meses acá vas a ver cómo crece 🌱</div>';
+  const W = 340, H = 170, pt = 18, pb = 22, ch = H - pt - pb;
+  const vals = pts.map(p => p.saldo), mn = Math.min(0, ...vals), mx = Math.max(1, ...vals);
+  const X = k => 4 + (W - 8) * k / (pts.length - 1), Y = v => pt + ch * (1 - (v - mn) / (mx - mn || 1));
+  const line = pts.map((p, k) => X(k).toFixed(1)+','+Y(p.saldo).toFixed(1)).join(' ');
+  let s = '<defs><linearGradient id="gv" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--verde)" stop-opacity=".35"/><stop offset="1" stop-color="var(--verde)" stop-opacity="0"/></linearGradient></defs>';
+  s += '<path d="M'+X(0)+','+Y(mn)+' L'+line.split(' ').join(' L')+' L'+X(pts.length-1)+','+Y(mn)+' Z" fill="url(#gv)"/>';
+  s += '<polyline points="'+line+'" fill="none" stroke="var(--verde)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
+  const paso = Math.ceil(pts.length / 7);
+  pts.forEach((p, k) => {
+    s += '<circle cx="'+X(k)+'" cy="'+Y(p.saldo)+'" r="'+(k === pts.length - 1 ? 5 : 3)+'" fill="var(--verde)" stroke="var(--card)" stroke-width="1.5"><title>Fin de '+mesLabel(p.m)+': '+plata(p.saldo)+'</title></circle>';
+    if(k % paso === 0 || k === pts.length - 1) s += '<text x="'+X(k)+'" y="'+(H-4)+'" class="ax" style="text-anchor:'+(k === 0 ? 'start' : k === pts.length - 1 ? 'end' : 'middle')+'">'+mesCorto(p.m, true)+'</text>';
+  });
+  const u = pts[pts.length - 1];
+  s += '<text x="'+(X(pts.length-1)-8)+'" y="'+(Y(u.saldo)-10)+'" class="ax" style="text-anchor:end;font-size:12px;font-weight:900;fill:var(--tx)">'+corto(u.saldo)+'</text>';
+  return '<svg viewBox="0 0 '+W+' '+H+'" class="chart">'+s+'</svg>';
+}
+function barrasAhorro(pts){
+  if(!pts.length) return '<div class="vacio">Todavía no cerró ningún mes 🗓️</div>';
+  const P = pts.slice(-12), W = 340, H = 150, pt = 16, pb = 20, ch = H - pt - pb;
+  const mx = Math.max(1, ...P.map(p => p.b)), mn = Math.min(0, ...P.map(p => p.b));
+  const Y = v => pt + ch * (1 - (v - mn) / (mx - mn || 1)), bw = W / P.length, w = Math.min(26, bw * 0.6);
+  let s = '<line class="gl" x1="0" x2="'+W+'" y1="'+Y(0)+'" y2="'+Y(0)+'"/>';
+  P.forEach((p, k) => {
+    const cx = k * bw + bw / 2, y0 = Y(0), y1 = Y(p.b), pc = p.i ? Math.round(p.b / p.i * 100) : 0;
+    s += '<rect x="'+(cx-w/2)+'" y="'+Math.min(y0, y1)+'" width="'+w+'" height="'+Math.max(1, Math.abs(y1 - y0))+'" rx="4" fill="'+(p.b >= 0 ? 'var(--verde)' : 'var(--rojo)')+'"><title>'+mesLabel(p.m)+': '+plata(p.b)+' ('+pc+'% de lo que entró)</title></rect>';
+    if(P.length <= 8) s += '<text x="'+cx+'" y="'+(p.b >= 0 ? y1 - 4 : y0 - 4)+'" class="ax" style="font-size:9px">'+pc+'%</text>';
+    s += '<text x="'+cx+'" y="'+(H-4)+'" class="ax">'+mesCorto(p.m)+'</text>';
+  });
+  return '<svg viewBox="0 0 '+W+' '+H+'" class="chart">'+s+'</svg><div class="keys"><span>Lo que te sobró cada mes y qué % de lo que entró</span></div>';
+}
+
+function filaMeta(mt, A){
+  const ap = aportadoMeta(mt), obj = +mt.objetivo || 0, pc = obj ? Math.min(100, ap / obj * 100) : 0, falta = Math.max(0, obj - ap);
+  const act = mesActual();
+  let nota;
+  if(obj && ap >= obj) nota = '🎉 ¡Meta cumplida!';
+  else if(mt.fecha){
+    const meses = Math.max(1, (+mt.fecha.slice(0,4) - +act.slice(0,4)) * 12 + (+mt.fecha.slice(5) - +act.slice(5)));
+    nota = mt.fecha < act ? '⏰ Se pasó la fecha ('+mesLabel(mt.fecha).toLowerCase()+') · faltan '+plata(falta)
+      : '📅 Para '+mesLabel(mt.fecha).toLowerCase()+' apartá '+plata(falta / meses)+' por mes';
+  } else if(A.prom > 0){
+    const n = Math.ceil(falta / A.prom);
+    nota = '🏃 A tu ritmo de ahorro llegás en ~'+n+' mes'+(n === 1 ? '' : 'es');
+  } else nota = 'Faltan '+plata(falta);
+  return '<div class="meta"><div class="row" style="gap:12px"><span class="ico" style="background:var(--sv);flex:none">'+esc(mt.e || '🎯')+'</span>'+
+    '<div class="mt" onclick="editarMeta(\''+mt.id+'\')" style="cursor:pointer"><b>'+esc(mt.nombre)+'</b><small>'+plata(ap)+' de '+plata(obj)+' · '+Math.round(pc)+'%</small></div>'+
+    '<button class="btn sm ok" style="flex:none" onclick="aportarMeta(\''+mt.id+'\')">+ Apartar</button></div>'+
+    '<div class="pbar" style="height:12px;margin:10px 0 6px"><i style="width:'+pc.toFixed(1)+'%;background:linear-gradient(90deg,#16a34a,#0d9488)"></i></div>'+
+    '<div class="mu" style="font-size:13px;font-weight:700">'+nota+'</div></div>';
+}
+
+function vAhorros(){
+  const A = ahorroInfo(), SA = S.ahorro, act = mesActual(), metas = SA.metas;
+  const mood = A.total < 0 ? '😬' : A.tasa >= 20 ? '🤑' : '🐷';
+  let h = '<div class="stack">';
+  h += '<div class="hero'+(A.total < 0 ? ' neg' : ' ok')+'"><div class="mood">'+mood+'</div><div class="lbl">Tenés ahorrado</div><div class="big">'+plata(A.total)+'</div>'+
+    '<div class="sub">'+(A.enCurso >= 0 ? '➕ Este mes vas sumando ' : '➖ Este mes vas restando ')+plata(Math.abs(A.enCurso))+' (en curso) · si cerrás así, quedás en '+plata(A.total + A.enCurso)+'</div></div>';
+  h += '<div class="grid g4">'+
+    kpi('📈','var(--sv)','Ahorro promedio', plata(A.prom), A.pts.length ? 'por mes, últimos '+Math.min(6, A.pts.length) : 'este mes')+
+    kpi('💯','var(--sa)','Tasa de ahorro', Math.round(A.tasa)+'%', 'de lo que te entra')+
+    kpi('🏆','var(--sy)','Mejor mes', A.mejor ? plata(A.mejor.b) : '—', A.mejor ? mesLabel(A.mejor.m) : 'todavía no hay')+
+    kpi('🎯','var(--sp)','Apartado en metas', plata(A.enMetas), A.libre >= 0 ? 'libre '+plata(A.libre) : '⚠️ apartaste de más')+
+    '</div>';
+  h += '<div class="cols"><div class="stack">';
+  h += '<div class="card"><h2>🌱 Ahorro acumulado<small>al cierre de cada mes</small></h2>'+lineaAhorro(A.pts)+'</div>';
+  h += '<div class="card"><h2>📊 Cuánto ahorraste cada mes</h2>'+barrasAhorro(A.pts)+'</div>';
+  h += '</div><div class="stack">';
+  h += '<div class="card"><h2>🎯 Metas<small><button class="btn sm pri" onclick="nuevaMeta()">+ Nueva</button></small></h2>'+
+    (metas.length ? metas.map(mt => filaMeta(mt, A)).join('') +
+      '<div class="tipbox'+(A.libre < 0 ? ' r' : ' v')+'" style="margin-top:14px">'+(A.libre < 0 ? '⚠️ Apartaste '+plata(-A.libre)+' más de lo que tenés ahorrado.' : '🐷 Te quedan <b>'+plata(A.libre)+'</b> libres para repartir.')+'</div>'
+      : '<div class="vacio">Poné una meta: un viaje ✈️, un fondo de emergencia 🛟, la compu nueva 💻…</div>')+'</div>';
+  h += '<div class="card"><h2>🏁 Punto de partida</h2>'+
+    '<p class="mu" style="margin:-4px 0 4px;font-size:13px;font-weight:600">Lo que ya tenías ahorrado cuando empezaste a usar la app. Desde ahí se suma solo lo que te sobra cada mes.</p>'+
+    '<div class="row"><div><label class="lb">💰 Tenía ahorrado</label><input class="inp" inputmode="decimal" placeholder="0" value="'+(+SA.inicial ? NF.format(SA.inicial) : '')+'" onchange="setAhorro(\'inicial\',this.value)"></div>'+
+    '<div><label class="lb">📅 A principio de</label><input class="inp" type="month" value="'+A.desde+'" max="'+act+'" onchange="setAhorro(\'desde\',this.value)"></div></div></div>';
+  h += '<div class="card"><h2>✍️ Ajustes<small><button class="btn sm" onclick="nuevoAjuste()">+ Agregar</button></small></h2>'+
+    '<p class="mu" style="margin:-4px 0 8px;font-size:13px;font-weight:600">Intereses de un plazo fijo, plata que sacaste de los ahorros, una venta… lo que no pasa por gastos e ingresos.</p>'+
+    (SA.ajustes.length ? SA.ajustes.slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).map(a =>
+      '<div class="mov" onclick="editarAjuste(\''+a.id+'\')"><span class="ico" style="background:'+(a.monto >= 0 ? 'var(--sv)' : 'var(--sr)')+'">'+(a.monto >= 0 ? '📥' : '📤')+'</span><div class="mt"><b>'+esc(a.desc || (a.monto >= 0 ? 'Entrada a ahorros' : 'Retiro'))+'</b><small>'+fechaLarga(a.fecha)+'</small></div><span class="mm '+(a.monto >= 0 ? 'i' : 'g')+'">'+(a.monto >= 0 ? '+' : '-')+plata(Math.abs(a.monto))+'</span></div>').join('')
+      : '<div class="vacio">Sin ajustes</div>')+'</div>';
+  h += '</div></div></div>';
+  return h;
+}
+function setAhorro(k, v){
+  if(k === 'inicial'){ v = parseMonto(v); if(isNaN(v)) v = 0; }
+  if(k === 'desde' && !/^\d{4}-\d{2}$/.test(v)) return render();
+  S.ahorro[k] = v; save(); render();
+}
+
+/* metas */
+function nuevaMeta(){ F = {id:null, e:'🎯', nombre:'', monto:'', fecha:''}; formMeta(); focoMonto(); }
+function editarMeta(id){
+  const mt = S.ahorro.metas.find(x => x.id === id); if(!mt) return;
+  F = {id:mt.id, e:mt.e, nombre:mt.nombre, monto:NF.format(mt.objetivo), fecha:mt.fecha || ''}; formMeta();
+}
+function formMeta(){
+  const EMO = ['🎯','✈️','🛟','💻','🏠','🚗','💍','🎓','📱','🏖️','🎸','👶'];
+  abrirSheet('<div class="sh-h"><h3>🎯 '+(F.id ? 'Editar' : 'Nueva')+' meta</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<label class="lb">Ícono</label><div class="chips">'+EMO.map(e => '<button class="chip'+(F.e === e ? ' on' : '')+'" style="font-size:20px;padding:6px 10px" onclick="F.e=\''+e+'\';formMeta()">'+e+'</button>').join('')+'</div>'+
+    '<label class="lb">Nombre</label><input class="inp" value="'+esc(F.nombre)+'" placeholder="Ej: Viaje a Brasil" oninput="F.nombre=this.value">'+
+    '<label class="lb">¿Cuánto necesitás juntar?</label>'+montoIn('i', F.monto, 'guardarMeta')+
+    '<label class="lb">📅 ¿Para cuándo? (opcional)</label><input class="inp" type="month" value="'+F.fecha+'" onchange="F.fecha=this.value">'+
+    '<div class="row" style="margin-top:18px">'+(F.id ? '<button class="btn del" style="flex:0 0 auto" onclick="borrarMeta()">🗑️</button>' : '')+
+    '<button class="btn ok" onclick="guardarMeta()">Guardar ✓</button></div>');
+}
+function guardarMeta(){
+  const obj = parseMonto(F.monto);
+  if(!F.nombre.trim()) return toast('Ponele un nombre ✏️');
+  if(!(obj > 0)) return toast('¿Cuánto querés juntar? 💵');
+  if(F.id) Object.assign(S.ahorro.metas.find(x => x.id === F.id), {e:F.e, nombre:F.nombre.trim(), objetivo:obj, fecha:F.fecha || ''});
+  else S.ahorro.metas.push({id:uid(), e:F.e, nombre:F.nombre.trim(), objetivo:obj, fecha:F.fecha || '', aportes:[]});
+  save(); cerrarSheet(); render(); toast('🎯 Meta guardada');
+}
+function borrarMeta(){
+  const mt = S.ahorro.metas.find(x => x.id === F.id);
+  if(!confirm('¿Borrar la meta "'+mt.nombre+'"? Lo que tenía apartado vuelve a quedar libre.')) return;
+  S.ahorro.metas = S.ahorro.metas.filter(x => x.id !== F.id); save(); cerrarSheet(); render();
+}
+function aportarMeta(id){ F = {id, signo:1, monto:''}; formAporte(); focoMonto(); }
+function formAporte(){
+  const mt = S.ahorro.metas.find(x => x.id === F.id), A = ahorroInfo();
+  abrirSheet('<div class="sh-h"><h3>'+esc(mt.e)+' '+esc(mt.nombre)+'</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<div class="seg" style="margin-top:14px"><button class="'+(F.signo > 0 ? 'on i' : '')+'" onclick="F.signo=1;formAporte()">🐷 Apartar</button><button class="'+(F.signo < 0 ? 'on g' : '')+'" onclick="F.signo=-1;formAporte()">📤 Sacar</button></div>'+
+    montoIn(F.signo > 0 ? 'i' : 'g', F.monto, 'guardarAporte')+
+    '<p class="mu" style="font-size:13px;margin:8px 4px 0;font-weight:700">'+(F.signo > 0 ? 'Tenés '+plata(A.libre)+' libres para apartar.' : 'Esta meta tiene '+plata(aportadoMeta(mt))+' apartados.')+'</p>'+
+    '<div class="row" style="margin-top:18px"><button class="btn '+(F.signo > 0 ? 'ok' : 'pri')+'" onclick="guardarAporte()">'+(F.signo > 0 ? 'Apartar' : 'Sacar')+' ✓</button></div>');
+}
+function guardarAporte(){
+  const v = parseMonto(F.monto);
+  if(!(v > 0)) return toast('Poné un monto 💵');
+  const mt = S.ahorro.metas.find(x => x.id === F.id);
+  mt.aportes = mt.aportes || [];
+  mt.aportes.push({fecha: hoyISO(), monto: v * F.signo});
+  save(); cerrarSheet(); render();
+  toast(+mt.objetivo && aportadoMeta(mt) >= mt.objetivo ? '🎉 ¡Cumpliste la meta!' : (F.signo > 0 ? '🐷 Apartado' : '📤 Sacado'));
+}
+
+/* ajustes de ahorro */
+function nuevoAjuste(){ F = {id:null, signo:1, monto:'', fecha:hoyISO(), desc:''}; formAjuste(); focoMonto(); }
+function editarAjuste(id){
+  const a = S.ahorro.ajustes.find(x => x.id === id); if(!a) return;
+  F = {id:a.id, signo: a.monto >= 0 ? 1 : -1, monto:NF.format(Math.abs(a.monto)), fecha:a.fecha, desc:a.desc}; formAjuste();
+}
+function formAjuste(){
+  abrirSheet('<div class="sh-h"><h3>✍️ '+(F.id ? 'Editar' : 'Nuevo')+' ajuste</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<div class="seg" style="margin-top:14px"><button class="'+(F.signo > 0 ? 'on i' : '')+'" onclick="F.signo=1;formAjuste()">📥 Entra</button><button class="'+(F.signo < 0 ? 'on g' : '')+'" onclick="F.signo=-1;formAjuste()">📤 Sale</button></div>'+
+    montoIn(F.signo > 0 ? 'i' : 'g', F.monto, 'guardarAjuste')+
+    '<label class="lb">📝 Qué es</label><input class="inp" value="'+esc(F.desc)+'" placeholder="'+(F.signo > 0 ? 'Ej: Intereses plazo fijo' : 'Ej: Saqué para el auto')+'" oninput="F.desc=this.value">'+
+    '<label class="lb">📅 Fecha</label><input class="inp" type="date" value="'+F.fecha+'" onchange="F.fecha=this.value">'+
+    '<div class="row" style="margin-top:18px">'+(F.id ? '<button class="btn del" style="flex:0 0 auto" onclick="borrarAjuste()">🗑️</button>' : '')+
+    '<button class="btn pri" onclick="guardarAjuste()">Guardar ✓</button></div>');
+}
+function guardarAjuste(){
+  const v = parseMonto(F.monto);
+  if(!(v > 0)) return toast('Poné un monto 💵');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(F.fecha || '')) return toast('Elegí una fecha 📅');
+  const a = {id: F.id || uid(), monto: v * F.signo, fecha: F.fecha, desc: (F.desc || '').trim()};
+  const i = S.ahorro.ajustes.findIndex(x => x.id === a.id);
+  if(i >= 0) S.ahorro.ajustes[i] = a; else S.ahorro.ajustes.push(a);
+  save(); cerrarSheet(); render(); toast('✍️ Ajuste guardado');
+}
+function borrarAjuste(){ S.ahorro.ajustes = S.ahorro.ajustes.filter(x => x.id !== F.id); save(); cerrarSheet(); render(); }
 
 /* ----- ⚙️ Ajustes ----- */
 function vAjustes(){
@@ -1158,7 +1371,11 @@ function datosDemo(){
   d.cats.find(c => c.id === 'super').p = 350000;
   d.cats.find(c => c.id === 'comida').p = 150000;
   d.cats.find(c => c.id === 'salidas').p = 120000;
-  d.plan.ahorro = 800000;
+  d.ahorro.inicial = 600000; d.ahorro.desde = mesSum(act, -5);
+  d.ahorro.ajustes.push({id: uid(), monto: 38000, fecha: mesSum(act, -2) + '-28', desc: 'Intereses plazo fijo'});
+  d.ahorro.metas.push({id: uid(), e:'🛟', nombre:'Fondo de emergencia', objetivo: 1500000, fecha:'', aportes:[{fecha: hoyISO(), monto: 500000}]});
+  d.ahorro.metas.push({id: uid(), e:'✈️', nombre:'Viaje a Brasil', objetivo: 1200000, fecha: mesSum(act, 6), aportes:[{fecha: hoyISO(), monto: 300000}]});
+  d.ahorro.metas.push({id: uid(), e:'💻', nombre:'Notebook nueva', objetivo: 250000, fecha:'', aportes:[{fecha: hoyISO(), monto: 250000}]});
   const y = +act.slice(0, 4), mm = +act.slice(5);
   d.extras.push({id: uid(), t:'i', monto: 725000, desc:'Aguinaldo 🎉', mes: (mm <= 12 ? y : y + 1) + '-12'});
   d.extras.push({id: uid(), t:'g', monto: 1200000, desc:'Vacaciones ✈️', mes: (y + 1) + '-01'});
