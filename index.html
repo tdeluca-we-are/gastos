@@ -88,6 +88,7 @@ main{max-width:1080px;margin:0 auto;padding:8px 16px 120px}
   .logo{font-size:18px}
   .mesnav b{min-width:112px;font-size:14px}
   .hd .sync{order:2}
+  .hd .gear{order:2;width:32px;height:32px;font-size:15px}
   .hd .mesnav{order:3;width:100%;justify-content:space-between}
   nav.tabs button{padding:4px 2px;font-size:10.5px}
   nav.tabs .lg{display:none}
@@ -237,6 +238,22 @@ input[type=range]{width:100%;accent-color:var(--azul)}
 .welcome ol{margin:10px 0 0;padding-left:20px;font-weight:700}
 .welcome li{margin:6px 0}
 .welcome li a{color:var(--azul);cursor:pointer;text-decoration:underline}
+.gear{width:36px;height:36px;border-radius:50%;background:var(--card);box-shadow:var(--sombra);font-size:17px;display:grid;place-items:center}
+.gear.on{background:var(--tx)}
+.bills{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.billc{cursor:pointer;border:2px solid var(--ln);box-shadow:none;padding:16px}
+.billc:hover{border-color:var(--azul)}
+.billc.tj{background:linear-gradient(135deg,color-mix(in srgb,var(--vio) 10%,var(--card)),var(--card))}
+.billc.dn{background:linear-gradient(135deg,color-mix(in srgb,var(--verde) 10%,var(--card)),var(--card))}
+.bill-e{font-size:30px;flex:none}
+.bill-n{font-weight:800;margin-top:8px}
+.bill-s{font-size:26px;font-weight:900;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{flex:0 0 auto!important;margin-left:auto;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;background:var(--sv);color:var(--verde)}
+.pill.r{background:var(--sr);color:var(--rojo)}
+.bstrip{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px}
+.bstrip button{flex:0 0 auto;background:var(--card);box-shadow:var(--sombra);border-radius:16px;padding:10px 14px;text-align:left;min-width:140px}
+.bstrip small{display:block;color:var(--mu);font-weight:700;font-size:12px}
+.bstrip b{font-size:17px;font-weight:900}
 </style>
 </head>
 <body>
@@ -259,6 +276,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
     <div class="hd">
       <div class="logo"><span>💸</span>Mis Gastos</div>
       <div id="sync"></div>
+      <button id="gear" class="gear" onclick="irTab('ajustes')" aria-label="Ajustes" title="Ajustes">⚙️</button>
       <div class="mesnav" id="mesnav">
         <button onclick="moverMes(-1)" aria-label="Mes anterior">‹</button>
         <b id="mes-lbl"></b>
@@ -282,7 +300,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
    sin tocar la nube.
    ============================================================ */
 
-const VERSION_APP = '1.3';
+const VERSION_APP = '1.4';
 const SB_URL  = 'https://ojzcxwhoinmljospgmfp.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qemN4d2hvaW5tbGpvc3BnbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDY5MTYsImV4cCI6MjA5MzQ4MjkxNn0.jmvVP3weuclrBpQJb57BwmHD77Ofy4CDe43cnmiSFCk';
 const DEMO = /[?&]demo\b/.test(location.search);
@@ -315,7 +333,7 @@ const mkCats = L => L.map(c => ({id:c[0], e:c[1], n:c[2], c:c[3], p:0}));
 function estadoVacio(){
   return {v:1, movs:[], fijos:[], cats:mkCats(CATS_G), catsI:mkCats(CATS_I),
     plan:{meses:12, infl:2.5, aumIng:2, ahorro:'', gastoVar:'', ingVar:'', recorte:0}, extras:[],
-    ahorro:{inicial:0, desde:'', ajustes:[], metas:[]}};
+    ahorro:{inicial:0, desde:'', ajustes:[], metas:[]}, billeteras:[], transfs:[]};
 }
 function normalizar(d){
   const b = estadoVacio();
@@ -328,6 +346,8 @@ function normalizar(d){
     catsI:  Array.isArray(d.catsI) && d.catsI.length ? d.catsI : b.catsI,
     plan:   Object.assign(b.plan, d.plan || {}),
     extras: Array.isArray(d.extras) ? d.extras : [],
+    billeteras: Array.isArray(d.billeteras) ? d.billeteras : [],
+    transfs:    Array.isArray(d.transfs) ? d.transfs : [],
     ahorro: Object.assign(b.ahorro, d.ahorro || {}, {
       ajustes: Array.isArray(d.ahorro && d.ahorro.ajustes) ? d.ahorro.ajustes : [],
       metas:   Array.isArray(d.ahorro && d.ahorro.metas) ? d.ahorro.metas : []
@@ -595,7 +615,7 @@ function barrasProy(rows){
    ============================================================ */
 const TABS = [
   ['resumen','📊','Resumen'], ['movs','🧾','Movimientos','Movs'], ['fijos','📌','Fijos'],
-  ['ahorros','🐷','Ahorros'], ['proy','🔮','Proyección','Futuro'], ['ajustes','⚙️','Ajustes']
+  ['billeteras','👛','Billeteras','Plata'], ['ahorros','🐷','Ahorros'], ['proy','🔮','Proyección','Futuro']
 ];
 function irTab(t){ TAB = t; render(); window.scrollTo(0, 0); }
 function irMes(m){ MES = m; render(); }
@@ -605,9 +625,10 @@ function render(){
   document.getElementById('tabs').innerHTML = TABS.map(t =>
     '<button class="'+(TAB === t[0] ? 'on' : '')+'" onclick="irTab(\''+t[0]+'\')"><span class="em">'+t[1]+'</span><span class="lg">'+t[2]+'</span><span class="sh">'+(t[3] || t[2])+'</span></button>').join('');
   document.getElementById('mes-lbl').textContent = (MES === mesActual() ? '📅 ' : '') + mesLabel(MES);
-  document.getElementById('mesnav').classList.toggle('hide', TAB === 'proy' || TAB === 'ajustes' || TAB === 'ahorros');
+  document.getElementById('mesnav').classList.toggle('hide', TAB === 'proy' || TAB === 'ajustes' || TAB === 'ahorros' || TAB === 'billeteras');
+  document.getElementById('gear').classList.toggle('on', TAB === 'ajustes');
   document.getElementById('fab').classList.toggle('hide', TAB === 'ajustes');
-  const V = {resumen: vResumen, movs: vMovs, fijos: vFijos, ahorros: vAhorros, proy: vProy, ajustes: vAjustes}[TAB];
+  const V = {resumen: vResumen, movs: vMovs, fijos: vFijos, billeteras: vBilleteras, ahorros: vAhorros, proy: vProy, ajustes: vAjustes}[TAB];
   document.getElementById('view').innerHTML = V();
   if(TAB === 'proy') pintarProy();
 }
@@ -618,7 +639,7 @@ function kpi(e, bg, l, v, s){
 function filaMov(x, sinFecha){
   const c = catDe(x.t, x.cat);
   return '<div class="mov" onclick="editarMov(\''+x.id+'\')"><span class="ico" style="background:'+c.c+'22">'+c.e+'</span>'+
-    '<div class="mt"><b>'+esc(x.desc || c.n)+'</b><small>'+esc(c.n)+(sinFecha ? '' : ' · '+fechaLarga(x.fecha))+(x.origen === 'wpp' ? ' · 💬' : '')+'</small></div>'+
+    '<div class="mt"><b>'+esc(x.desc || c.n)+'</b><small>'+esc(c.n)+(sinFecha ? '' : ' · '+fechaLarga(x.fecha))+(S.billeteras.length > 1 && billDe(x.bill) ? ' · '+billDe(x.bill).e : '')+(x.origen === 'wpp' ? ' · 💬' : '')+'</small></div>'+
     '<span class="mm '+x.t+'">'+(x.t === 'g' ? '-' : '+')+plata(x.monto)+'</span></div>';
 }
 
@@ -649,6 +670,7 @@ function vResumen(){
     kpi('📌','var(--sy)','Fijos del mes', plata(T.gf), fp.length ? fp.length+' por pagar' : '✅ todo pagado')+
     kpi('🛍️','var(--sp)','Gasto variable', plata(T.gv), esActual ? 'promedio '+corto(T.gv / Math.max(1, +hoyISO().slice(8)))+'/día' : movsMes(MES).filter(x => x.t === 'g').length+' movimientos')+
     '</div>';
+  if(S.billeteras.length) h += '<div class="bstrip">'+S.billeteras.map(b => { const s = saldoBill(b), tj = b.tipo === 'tarjeta'; return '<button onclick="irTab(\'billeteras\')"><small>'+esc(b.e)+' '+esc(b.nombre)+'</small><b class="'+(s < 0 ? 'neg' : '')+'">'+(tj ? (s < 0 ? 'Debés '+plata(-s) : '✅ Al día') : plata(s))+'</b></button>'; }).join('')+'</div>';
 
   h += '<div class="cols"><div class="stack">';
   h += '<div class="card"><h2>🍩 ¿En qué se fue la plata?</h2>'+donut(pc, T.g)+'</div>';
@@ -747,7 +769,8 @@ function vFijos(){
 function togglePago(id){
   const f = S.fijos.find(x => x.id === id); if(!f) return;
   f.pagos = f.pagos || {};
-  if(f.pagos[MES]) delete f.pagos[MES]; else { f.pagos[MES] = true; toast(f.t === 'g' ? '✅ Marcado como pagado' : '✅ Marcado como cobrado'); }
+  // guardo cuándo lo marcaste: las billeteras solo descuentan lo pagado después de fijar su saldo
+  if(f.pagos[MES]) delete f.pagos[MES]; else { f.pagos[MES] = Date.now(); toast(f.t === 'g' ? '✅ Marcado como pagado' : '✅ Marcado como cobrado'); }
   save(); render();
 }
 
@@ -838,6 +861,185 @@ function pintarProy(){
   document.getElementById('proy-tabla').innerHTML = '<table class="t"><tr><th>Mes</th><th>Ingresos</th><th>Gastos</th><th>Ahorro</th><th>Acumulado</th></tr>'+
     rows.map(r => '<tr><td>'+(r.ex.length ? '⭐ ' : '')+mesCorto(r.m, true)+'</td><td>'+corto(r.ing)+'</td><td>'+corto(r.gas)+'</td><td class="'+(r.bal >= 0 ? 'pos' : 'neg')+'">'+corto(r.bal)+'</td><td class="'+(r.saldo >= 0 ? '' : 'neg')+'">'+corto(r.saldo)+'</td></tr>').join('')+'</table>';
 }
+
+/* ----- 💳 Billeteras ----- */
+// Una billetera es "dinero" (plata física o digital) o "tarjeta" (arranca en 0 y muestra la deuda).
+// El saldo = el que cargaste (base) + todo lo registrado DESPUÉS de cargarlo (ts > b.ts):
+// gastos/ingresos anotados con esa billetera, fijos tildados como pagados y transferencias.
+// Así lo anterior no se cuenta dos veces: ya está dentro del saldo que pusiste.
+// Pagar la tarjeta es una transferencia dinero → tarjeta: no es un gasto nuevo.
+function billPrincipal(){ return S.billeteras.find(b => b.tipo === 'dinero') || S.billeteras[0] || null; }
+function billDe(id){ return S.billeteras.find(b => b.id === id) || billPrincipal(); }
+function billIdDe(id){ const b = billDe(id); return b ? b.id : null; }
+function ultimaBill(t){
+  let id = null;
+  try{ id = localStorage.getItem('gastos_bill_' + t); }catch(e){}
+  return billIdDe(id);
+}
+function recordarBill(t, id){ try{ localStorage.setItem('gastos_bill_' + t, id); }catch(e){} }
+function chipsBill(titulo, fn){
+  if(!S.billeteras.length) return '';
+  return '<label class="lb">'+titulo+'</label><div class="chips">'+S.billeteras.map(b =>
+    '<button class="chip'+(F.bill === b.id ? ' on' : '')+'" style="--c:'+(b.tipo === 'tarjeta' ? 'var(--vio)' : 'var(--verde)')+'" onclick="'+fn+'(\''+b.id+'\')">'+esc(b.e)+' '+esc(b.nombre)+'</button>').join('')+'</div>';
+}
+function efectosBill(b){
+  const out = [], idDe = id => billIdDe(id);
+  S.movs.forEach(x => {
+    if(idDe(x.bill) !== b.id || (x.ts || 0) <= b.ts) return;
+    const c = catDe(x.t, x.cat);
+    out.push({ts: x.ts, fecha: x.fecha, monto: x.t === 'g' ? -x.monto : x.monto, desc: x.desc || c.n, e: c.e, k: 'mov', ref: x.id});
+  });
+  S.fijos.forEach(f => {
+    if(idDe(f.bill) !== b.id) return;
+    Object.keys(f.pagos || {}).forEach(m => {
+      const ts = f.pagos[m];
+      if(typeof ts !== 'number' || ts <= b.ts) return;   // tildado antes de fijar el saldo (o de versiones viejas)
+      const v = montoFijo(f, m), c = catDe(f.t, f.cat);
+      out.push({ts, fecha: m + '-' + pad(Math.min(f.dia || 1, diasEnMes(m))), monto: f.t === 'g' ? -v : v, desc: f.nombre + ' (' + mesCorto(m) + ')', e: c.e, k: 'fijo'});
+    });
+  });
+  S.transfs.forEach(t => {
+    if(t.ts <= b.ts) return;
+    if(t.de === b.id) out.push({ts: t.ts, fecha: t.fecha, monto: -t.monto, desc: t.desc || ('A ' + (billDe(t.a) || {}).nombre), e: '🔁', k: 'tr', ref: t.id});
+    if(t.a === b.id) out.push({ts: t.ts, fecha: t.fecha, monto: t.monto, desc: t.desc || ('Desde ' + (billDe(t.de) || {}).nombre), e: '🔁', k: 'tr', ref: t.id});
+  });
+  return out.sort((x, y) => y.ts - x.ts);
+}
+function saldoBill(b){ return (+b.base || 0) + suma(efectosBill(b), e => e.monto); }
+
+function tarjetaBill(b){
+  const s = saldoBill(b), tj = b.tipo === 'tarjeta';
+  const movsMesAct = efectosBill(b).filter(e => e.monto < 0 && e.k !== 'tr' && e.fecha.slice(0,7) === mesActual()).length;
+  return '<div class="card billc '+(tj ? 'tj' : 'dn')+'" onclick="verBill(\''+b.id+'\')">'+
+    '<div class="row" style="align-items:flex-start"><span class="bill-e">'+esc(b.e)+'</span>'+
+    (tj ? '<span class="pill '+(s < 0 ? 'r' : 'v')+'">'+(s < 0 ? 'A pagar' : '✅ Al día')+'</span>' : '<span class="pill v">Disponible</span>')+'</div>'+
+    '<div class="bill-n">'+esc(b.nombre)+'</div>'+
+    '<div class="bill-s '+(s < 0 ? 'neg' : '')+'">'+(tj ? plata(Math.abs(s)) : plata(s))+'</div>'+
+    '<div class="mu" style="font-size:12px;font-weight:700;margin-top:2px">'+(tj ? (s < 0 ? 'debés' : s > 0 ? 'a favor' : 'sin deuda') + ' · ' + movsMesAct + ' gasto' + (movsMesAct === 1 ? '' : 's') + ' este mes' : 'saldo actual')+'</div>'+
+    (tj && s < 0 ? '<button class="btn sm ok" style="margin-top:12px;width:100%" onclick="event.stopPropagation();pagarTarjeta(\''+b.id+'\')">💸 Pagar tarjeta</button>' : '')+
+    '</div>';
+}
+function vBilleteras(){
+  const D = S.billeteras.filter(b => b.tipo === 'dinero'), T = S.billeteras.filter(b => b.tipo === 'tarjeta');
+  if(!S.billeteras.length) return '<div class="stack"><div class="hero"><div class="mood">👛</div><div class="lbl">Billeteras</div><div class="big" style="font-size:30px">¿Dónde está tu plata?</div>'+
+    '<div class="sub">Cargá cuánto tenés hoy y tus tarjetas. Cada gasto que anotes va a descontar de donde lo pagaste.</div></div>'+
+    '<div class="grid g2"><button class="card" style="text-align:left" onclick="nuevaBill(\'dinero\')"><div style="font-size:34px">💵</div><b style="font-size:17px">Agregar mi plata</b><div class="mu" style="font-weight:600;font-size:13px">Física o digital, lo que tenés hoy</div></button>'+
+    '<button class="card" style="text-align:left" onclick="nuevaBill(\'tarjeta\')"><div style="font-size:34px">💳</div><b style="font-size:17px">Agregar una tarjeta</b><div class="mu" style="font-weight:600;font-size:13px">Arranca en $0 y suma lo que gastás con ella</div></button></div></div>';
+  const dinero = suma(D, saldoBill), deuda = -suma(T, b => Math.min(0, saldoBill(b)));
+  const libre = dinero - deuda;
+  let h = '<div class="stack"><div class="hero'+(libre < 0 ? ' neg' : '')+'"><div class="mood">👛</div><div class="lbl">Tu plata hoy</div><div class="big">'+plata(dinero)+'</div>'+
+    '<div class="sub">💳 Debés en tarjetas '+plata(deuda)+' · 🟢 Después de pagarlas te quedan '+plata(libre)+'</div></div>';
+  h += '<div class="card"><h2>💵 Dinero<small><button class="btn sm" onclick="nuevaBill(\'dinero\')">+ Agregar</button></small></h2>'+
+    (D.length ? '<div class="grid bills">'+D.map(tarjetaBill).join('')+'</div>' : '<div class="vacio">Agregá dónde tenés tu plata 💵</div>')+'</div>';
+  h += '<div class="card"><h2>💳 Tarjetas<small><button class="btn sm" onclick="nuevaBill(\'tarjeta\')">+ Agregar</button></small></h2>'+
+    (T.length ? '<div class="grid bills">'+T.map(tarjetaBill).join('')+'</div>' : '<div class="vacio">Agregá tus tarjetas para saber cuánto debés en cada una 💳</div>')+'</div>';
+  const tr = S.transfs.slice().sort((a, b) => b.ts - a.ts).slice(0, 10);
+  h += '<div class="card"><h2>🔁 Transferencias<small><button class="btn sm" onclick="nuevaTransf()">+ Nueva</button></small></h2>'+
+    (tr.length ? tr.map(t => { const de = billDe(t.de), a = billDe(t.a);
+      return '<div class="mov" onclick="editarTransf(\''+t.id+'\')"><span class="ico" style="background:var(--sa)">🔁</span><div class="mt"><b>'+esc(t.desc || ((de ? de.e + ' ' + de.nombre : '?') + ' → ' + (a ? a.e + ' ' + a.nombre : '?')))+'</b><small>'+(de ? esc(de.nombre) : '?')+' → '+(a ? esc(a.nombre) : '?')+' · '+fechaLarga(t.fecha)+'</small></div><span class="mm">'+plata(t.monto)+'</span></div>'; }).join('')
+      : '<div class="vacio">Cuando pagues una tarjeta o muevas plata entre billeteras, aparece acá</div>')+
+    '<p class="mu" style="font-size:13px;margin:10px 4px 0;font-weight:600">💡 Las transferencias no cuentan como gasto: el gasto ya lo anotaste cuando compraste con la tarjeta.</p></div>';
+  return h + '</div>';
+}
+
+/* detalle de una billetera */
+function verBill(id){
+  const b = S.billeteras.find(x => x.id === id); if(!b) return;
+  const s = saldoBill(b), tj = b.tipo === 'tarjeta', ef = efectosBill(b).slice(0, 40);
+  abrirSheet('<div class="sh-h"><h3>'+esc(b.e)+' '+esc(b.nombre)+'</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<div class="tipbox'+(s < 0 ? ' r' : ' v')+'" style="margin-top:14px;font-size:15px">'+(tj ? (s < 0 ? 'Debés <b>'+plata(-s)+'</b>' : '✅ Sin deuda'+(s > 0 ? ' · a favor '+plata(s) : '')) : 'Tenés <b>'+plata(s)+'</b>')+'</div>'+
+    '<div class="grid g2" style="margin-top:12px">'+
+      (tj && s < 0 ? '<button class="btn ok" onclick="pagarTarjeta(\''+b.id+'\')">💸 Pagar</button>' : '<button class="btn" onclick="nuevaTransf(\''+b.id+'\')">🔁 Transferir</button>')+
+      '<button class="btn" onclick="ajustarBill(\''+b.id+'\')">✏️ Corregir saldo</button></div>'+
+    '<label class="lb">Últimos movimientos</label>'+
+    (ef.length ? ef.map(e => '<div class="mov"'+(e.k === 'mov' ? ' onclick="editarMov(\''+e.ref+'\')"' : e.k === 'tr' ? ' onclick="editarTransf(\''+e.ref+'\')"' : '')+'><span class="ico" style="background:var(--in)">'+e.e+'</span><div class="mt"><b>'+esc(e.desc)+'</b><small>'+fechaLarga(e.fecha)+'</small></div><span class="mm '+(e.monto < 0 ? 'g' : 'i')+'">'+(e.monto < 0 ? '-' : '+')+plata(Math.abs(e.monto))+'</span></div>').join('')
+      : '<div class="vacio">Nada desde que cargaste el saldo</div>')+
+    '<p class="mu" style="font-size:12px;margin:10px 4px 0;font-weight:600">Saldo cargado: '+plata(tj ? -(+b.base || 0) : +b.base || 0)+(tj ? ' de deuda' : '')+' el '+new Date(b.ts).toLocaleDateString('es-AR')+'. Desde ahí se suma y resta solo.</p>'+
+    '<div class="row" style="margin-top:16px"><button class="btn del" style="flex:0 0 auto" onclick="borrarBill(\''+b.id+'\')">🗑️</button><button class="btn" onclick="editarBill(\''+b.id+'\')">✏️ Nombre e ícono</button></div>');
+}
+
+/* alta / edición */
+const EMO_BILL = {dinero: ['💵','🏦','💰','👛','📱','🪙'], tarjeta: ['💳','🟥','🟦','🟩','🟨','⬛']};
+function nuevaBill(tipo){ F = {id:null, tipo, e: EMO_BILL[tipo][0], nombre:'', monto:''}; formBill(); }
+function editarBill(id){ const b = S.billeteras.find(x => x.id === id); F = {id:b.id, tipo:b.tipo, e:b.e, nombre:b.nombre}; formBill(); }
+function formBill(){
+  const tj = F.tipo === 'tarjeta';
+  abrirSheet('<div class="sh-h"><h3>'+(F.id ? '✏️ Editar' : tj ? '💳 Nueva tarjeta' : '💵 Nueva billetera')+'</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<label class="lb">Ícono</label><div class="chips">'+EMO_BILL[F.tipo].map(e => '<button class="chip'+(F.e === e ? ' on' : '')+'" style="font-size:20px;padding:6px 10px" onclick="F.e=\''+e+'\';formBill()">'+e+'</button>').join('')+'</div>'+
+    '<label class="lb">Nombre</label><input class="inp" value="'+esc(F.nombre)+'" placeholder="'+(tj ? 'Ej: Visa Santander' : 'Ej: Mi plata')+'" oninput="F.nombre=this.value">'+
+    (F.id ? '' : '<label class="lb">'+(tj ? '¿Cuánto debés hoy en esta tarjeta? (si nada, dejalo en 0)' : '¿Cuánto tenés hoy?')+'</label>'+montoIn(tj ? 'g' : 'i', F.monto, 'guardarBill'))+
+    '<div class="row" style="margin-top:18px"><button class="btn pri" onclick="guardarBill()">Guardar ✓</button></div>');
+}
+function guardarBill(){
+  if(!F.nombre.trim()) return toast('Ponele un nombre ✏️');
+  if(F.id){ Object.assign(S.billeteras.find(x => x.id === F.id), {e: F.e, nombre: F.nombre.trim()}); }
+  else {
+    let v = F.monto === '' ? 0 : parseMonto(F.monto);
+    if(isNaN(v) || v < 0) return toast('Revisá el monto 💵');
+    S.billeteras.push({id: uid(), tipo: F.tipo, e: F.e, nombre: F.nombre.trim(), base: F.tipo === 'tarjeta' ? -v : v, ts: Date.now()});
+  }
+  save(); cerrarSheet(); render(); toast(F.tipo === 'tarjeta' ? '💳 Tarjeta guardada' : '💵 Billetera guardada');
+}
+function ajustarBill(id){
+  const b = S.billeteras.find(x => x.id === id), s = saldoBill(b);
+  F = {id, monto: NF.format(Math.abs(s))};
+  abrirSheet('<div class="sh-h"><h3>✏️ Corregir saldo</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<label class="lb">'+(b.tipo === 'tarjeta' ? '¿Cuánto debés ahora en '+esc(b.nombre)+'?' : '¿Cuánto tenés ahora en '+esc(b.nombre)+'?')+'</label>'+
+    montoIn(b.tipo === 'tarjeta' ? 'g' : 'i', F.monto, 'guardarAjusteBill')+
+    '<p class="mu" style="font-size:12px;margin:8px 4px 0;font-weight:600">Desde ahora el saldo arranca de este número. No cambia tus gastos ni tus reportes.</p>'+
+    '<div class="row" style="margin-top:18px"><button class="btn pri" onclick="guardarAjusteBill()">Guardar ✓</button></div>');
+  focoMonto();
+}
+function guardarAjusteBill(){
+  const v = parseMonto(F.monto);
+  if(isNaN(v) || v < 0) return toast('Revisá el monto 💵');
+  const b = S.billeteras.find(x => x.id === F.id);
+  b.base = b.tipo === 'tarjeta' ? -v : v; b.ts = Date.now();
+  save(); cerrarSheet(); render(); toast('✏️ Saldo corregido');
+}
+function borrarBill(id){
+  const b = S.billeteras.find(x => x.id === id);
+  if(!confirm('¿Borrar "'+b.nombre+'"?\n\nLos gastos anotados con ella no se borran: pasan a contar en tu billetera principal.')) return;
+  S.billeteras = S.billeteras.filter(x => x.id !== id);
+  S.transfs = S.transfs.filter(t => t.de !== id && t.a !== id);
+  save(); cerrarSheet(); render(); toast('🗑️ Billetera borrada');
+}
+
+/* transferencias */
+function nuevaTransf(de, a, monto, desc){
+  const D = S.billeteras.filter(b => b.tipo === 'dinero');
+  F = {id:null, de: de || (D[0] || S.billeteras[0] || {}).id, a: a || (S.billeteras.find(b => b.id !== (de || (D[0] || {}).id)) || {}).id, monto: monto ? NF.format(monto) : '', fecha: hoyISO(), desc: desc || ''};
+  formTransf(); if(!monto) focoMonto();
+}
+function pagarTarjeta(id){
+  const b = S.billeteras.find(x => x.id === id), deuda = -saldoBill(b), D = billPrincipal();
+  nuevaTransf(D && D.id !== id ? D.id : null, id, deuda > 0 ? deuda : '', 'Pago ' + b.nombre);
+}
+function editarTransf(id){ const t = S.transfs.find(x => x.id === id); if(!t) return; F = Object.assign({}, t, {monto: NF.format(t.monto)}); formTransf(); }
+function formTransf(){
+  const ch = (campo) => '<div class="chips">'+S.billeteras.map(b => '<button class="chip'+(F[campo] === b.id ? ' on' : '')+'" onclick="F.'+campo+'=\''+b.id+'\';formTransf()">'+esc(b.e)+' '+esc(b.nombre)+'</button>').join('')+'</div>';
+  abrirSheet('<div class="sh-h"><h3>🔁 '+(F.id ? 'Editar transferencia' : 'Transferir')+'</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    montoIn('i', F.monto, 'guardarTransf')+
+    '<label class="lb">📤 Desde</label>'+ch('de')+
+    '<label class="lb">📥 Hacia</label>'+ch('a')+
+    '<div class="row"><div><label class="lb">📅 Fecha</label><input class="inp" type="date" value="'+F.fecha+'" onchange="F.fecha=this.value"></div></div>'+
+    '<label class="lb">📝 Detalle (opcional)</label><input class="inp" value="'+esc(F.desc)+'" placeholder="Ej: Pago Visa" oninput="F.desc=this.value">'+
+    '<div class="row" style="margin-top:18px">'+(F.id ? '<button class="btn del" style="flex:0 0 auto" onclick="borrarTransf()">🗑️</button>' : '')+
+    '<button class="btn pri" onclick="guardarTransf()">Guardar ✓</button></div>');
+}
+function guardarTransf(){
+  const v = parseMonto(F.monto);
+  if(!(v > 0)) return toast('Poné un monto 💵');
+  if(!F.de || !F.a) return toast('Elegí desde y hacia 💳');
+  if(F.de === F.a) return toast('Elegí dos billeteras distintas 🔁');
+  const t = {id: F.id || uid(), de: F.de, a: F.a, monto: v, fecha: F.fecha || hoyISO(), desc: (F.desc || '').trim(), ts: F.ts || Date.now()};
+  const i = S.transfs.findIndex(x => x.id === t.id);
+  if(i >= 0) S.transfs[i] = t; else S.transfs.push(t);
+  save(); cerrarSheet(); render();
+  const a = billDe(t.a);
+  toast(a && a.tipo === 'tarjeta' && saldoBill(a) >= 0 ? '🎉 Tarjeta pagada' : '🔁 Transferencia guardada');
+}
+function borrarTransf(){ S.transfs = S.transfs.filter(x => x.id !== F.id); save(); cerrarSheet(); render(); }
 
 /* ----- 🐷 Ahorros ----- */
 // Lo ahorrado se calcula solo: punto de partida + lo que sobró cada mes (ingresos - gastos)
@@ -1131,12 +1333,12 @@ function focoMonto(){ setTimeout(() => { const i = document.getElementById('f-mo
 let F = null;
 function nuevoMov(t){
   if(TAB === 'fijos') return nuevoFijo('g');
-  F = {id:null, t:t || 'g', monto:'', cat:null, fecha: MES === mesActual() ? hoyISO() : MES + '-01', desc:''};
+  F = {id:null, t:t || 'g', monto:'', cat:null, fecha: MES === mesActual() ? hoyISO() : MES + '-01', desc:'', bill: ultimaBill(t || 'g')};
   formMov(); focoMonto();
 }
 function editarMov(id){
   const x = S.movs.find(m => m.id === id); if(!x) return;
-  F = Object.assign({}, x, {monto: String(x.monto).replace('.', ',')});
+  F = Object.assign({}, x, {monto: String(x.monto).replace('.', ','), bill: billIdDe(x.bill)});
   formMov();
 }
 function formMov(){
@@ -1146,12 +1348,14 @@ function formMov(){
     '<div class="seg" style="margin-top:14px"><button class="'+(F.t === 'g' ? 'on g' : '')+'" onclick="F.t=\'g\';F.cat=null;formMov()">💸 Gasto</button><button class="'+(F.t === 'i' ? 'on i' : '')+'" onclick="F.t=\'i\';F.cat=null;formMov()">💰 Ingreso</button></div>'+
     montoIn(F.t, F.monto, 'guardarMov')+
     '<label class="lb">Categoría</label>'+chipsCat(F.t, F.cat, 'selCatMov')+
+    chipsBill(F.t === 'g' ? '💳 ¿Con qué pagaste?' : '💳 ¿Adónde entró?', 'selBillMov')+
     '<div class="row"><div><label class="lb">📅 Fecha</label><input class="inp" type="date" value="'+F.fecha+'" onchange="F.fecha=this.value"></div></div>'+
     '<label class="lb">📝 Detalle (opcional)</label><input class="inp" value="'+esc(F.desc)+'" placeholder="'+(F.t === 'g' ? 'Ej: Coto, nafta, cumple de Juan…' : 'Ej: Trabajo freelance')+'" oninput="F.desc=this.value" onkeydown="if(event.key===\'Enter\')guardarMov()">'+
     '<div class="row" style="margin-top:18px">'+(F.id ? '<button class="btn del" style="flex:0 0 auto" onclick="borrarMov()">🗑️</button>' : '')+
     '<button class="btn '+(F.t === 'g' ? 'pri' : 'ok')+'" onclick="guardarMov()">'+(F.id ? 'Guardar cambios' : 'Guardar')+' ✓</button></div>');
 }
 function selCatMov(id){ F.cat = id; formMov(); }
+function selBillMov(id){ F.bill = id; formMov(); }
 function guardarMov(){
   const monto = parseMonto(F.monto);
   if(!(monto > 0)) { toast('Poné un monto 💵'); const i = document.getElementById('f-monto'); if(i) i.focus(); return; }
@@ -1159,6 +1363,7 @@ function guardarMov(){
   const x = {id: F.id || uid(), t: F.t, monto, cat: F.cat, fecha: F.fecha, desc: (F.desc || '').trim(), ts: F.ts || Date.now()};
   if(F.origen) x.origen = F.origen;
   if(F.wid) x.wid = F.wid;
+  if(F.bill){ x.bill = F.bill; recordarBill(x.t, F.bill); }
   const i = S.movs.findIndex(m => m.id === x.id);
   if(i >= 0) S.movs[i] = x; else S.movs.push(x);
   save(); cerrarSheet();
@@ -1173,12 +1378,12 @@ function borrarMov(){
 
 /* ----- fijo ----- */
 function nuevoFijo(t){
-  F = {id:null, t:t || 'g', nombre:'', monto:'', cat:null, dia:'', desde: MES};
+  F = {id:null, t:t || 'g', nombre:'', monto:'', cat:null, dia:'', desde: MES, bill: billIdDe(null)};
   formFijo(); focoMonto();
 }
 function editarFijo(id){
   const f = S.fijos.find(x => x.id === id); if(!f) return;
-  F = {id:f.id, t:f.t, nombre:f.nombre, monto:String(montoFijo(f, MES)).replace('.', ','), cat:f.cat, dia:f.dia || '', desde:f.desde};
+  F = {id:f.id, t:f.t, nombre:f.nombre, monto:String(montoFijo(f, MES)).replace('.', ','), cat:f.cat, dia:f.dia || '', desde:f.desde, bill: billIdDe(f.bill)};
   formFijo();
 }
 function formFijo(){
@@ -1190,12 +1395,14 @@ function formFijo(){
     montoIn(F.t, F.monto, 'guardarFijo')+
     (F.id ? '<p class="mu" style="font-size:12px;margin:6px 4px 0;font-weight:600">Si cambiás el monto, aplica desde '+mesLabel(MES).toLowerCase()+' en adelante. Los meses anteriores quedan como estaban.</p>' : '')+
     '<label class="lb">Categoría</label>'+chipsCat(F.t, F.cat, 'selCatFijo')+
+    chipsBill(F.t === 'g' ? '💳 ¿Con qué lo pagás?' : '💳 ¿Adónde entra?', 'selBillFijo')+
     '<div class="row"><div><label class="lb">📆 Día del mes</label><input class="inp" inputmode="numeric" value="'+esc(F.dia)+'" placeholder="Ej: 10" oninput="F.dia=this.value"></div>'+
     '<div><label class="lb">▶️ Desde</label><input class="inp" type="month" value="'+F.desde+'" onchange="F.desde=this.value"></div></div>'+
     '<div class="row" style="margin-top:18px">'+(F.id ? '<button class="btn del" style="flex:0 0 auto" onclick="bajaFijo()">🗑️ Dar de baja</button>' : '')+
     '<button class="btn '+(F.t === 'g' ? 'pri' : 'ok')+'" onclick="guardarFijo()">Guardar ✓</button></div>');
 }
 function selCatFijo(id){ F.cat = id; formFijo(); }
+function selBillFijo(id){ F.bill = id; formFijo(); }
 function guardarFijo(){
   const monto = parseMonto(F.monto);
   if(!F.nombre.trim()) return toast('Ponele un nombre ✏️');
@@ -1205,6 +1412,7 @@ function guardarFijo(){
   if(F.id){
     const f = S.fijos.find(x => x.id === F.id);
     f.nombre = F.nombre.trim(); f.cat = F.cat; f.dia = dia; f.desde = F.desde;
+    if(F.bill) f.bill = F.bill;
     if(montoFijo(f, MES) !== monto){
       f.montos = f.montos || {};
       // el cambio vale desde el mes que estás mirando; borro cambios posteriores que ya no aplican
@@ -1213,7 +1421,7 @@ function guardarFijo(){
     }
     f.monto = monto;
   } else {
-    S.fijos.push({id: uid(), t: F.t, nombre: F.nombre.trim(), monto, montos: {[F.desde]: monto}, cat: F.cat, dia, desde: F.desde, hasta: null, pagos: {}});
+    S.fijos.push({id: uid(), t: F.t, nombre: F.nombre.trim(), monto, montos: {[F.desde]: monto}, cat: F.cat, dia, desde: F.desde, hasta: null, pagos: {}, bill: F.bill || null});
   }
   save(); cerrarSheet(); render(); toast('📌 Fijo guardado');
 }
@@ -1365,12 +1573,23 @@ function datosDemo(){
       d.movs.push({id: uid(), t:'g', monto: Math.round((p[1][0] + rnd() * (p[1][1] - p[1][0])) / 100) * 100, cat: p[0], fecha: m + '-' + pad(1 + Math.floor(rnd() * dias)), desc: p[2][Math.floor(rnd() * p[2].length)], ts: j});
     }
     if(k % 2 === 0) d.movs.push({id: uid(), t:'i', monto: 180000 + Math.round(rnd() * 12) * 10000, cat:'freelance', fecha: m + '-' + pad(Math.min(dias, 12)), desc:'Proyecto freelance', ts: 0});
-    if(k > 0) d.fijos.forEach(f => f.pagos[m] = true);
+    if(k > 0) d.fijos.forEach(f => f.pagos[m] = 1);
   }
   d.fijos.forEach(f => { if(f.dia && f.dia < hoy - 2) f.pagos[act] = true; });
   d.cats.find(c => c.id === 'super').p = 350000;
   d.cats.find(c => c.id === 'comida').p = 150000;
   d.cats.find(c => c.id === 'salidas').p = 120000;
+  // billeteras: saldo cargado a principio de mes; lo de este mes se descuenta de ahí
+  const ant = mesSum(act, -1), ini0 = new Date(+ant.slice(0,4), +ant.slice(5) - 1, 1).getTime();
+  d.billeteras.push({id:'b1', tipo:'dinero', e:'💵', nombre:'Mi plata', base: 2350000, ts: ini0});
+  d.billeteras.push({id:'b2', tipo:'tarjeta', e:'🟥', nombre:'Visa Santander', base: 0, ts: ini0});
+  d.billeteras.push({id:'b3', tipo:'tarjeta', e:'🟦', nombre:'Master ICBC', base: 0, ts: ini0});
+  d.movs.filter(x => x.fecha.slice(0,7) >= ant).forEach((x, k) => {
+    x.ts = new Date(+x.fecha.slice(0,4), +x.fecha.slice(5,7) - 1, +x.fecha.slice(8)).getTime() + k;
+    x.bill = x.t === 'i' ? 'b1' : ['b1','b2','b2','b3'][k % 4];
+  });
+  d.fijos.forEach(f => [ant, act].forEach(m => { if(f.pagos[m]) f.pagos[m] = new Date(+m.slice(0,4), +m.slice(5) - 1, f.dia || 1).getTime() + 1; }));
+  d.transfs.push({id: uid(), de:'b1', a:'b3', monto: 120000, fecha: ant + '-20', desc:'Pago Master ICBC', ts: ini0 + 19 * 864e5});
   d.ahorro.inicial = 600000; d.ahorro.desde = mesSum(act, -5);
   d.ahorro.ajustes.push({id: uid(), monto: 38000, fecha: mesSum(act, -2) + '-28', desc: 'Intereses plazo fijo'});
   d.ahorro.metas.push({id: uid(), e:'🛟', nombre:'Fondo de emergencia', objetivo: 1500000, fecha:'', aportes:[{fecha: hoyISO(), monto: 500000}]});
