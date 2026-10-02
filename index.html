@@ -231,10 +231,22 @@ table.t th:first-child,table.t td:first-child{text-align:left}
 input[type=range]{width:100%;accent-color:var(--azul)}
 .catrow{display:grid;grid-template-columns:52px 1fr 44px 120px 36px;gap:8px;align-items:center}
 .catrow+.catrow{margin-top:8px}
+.catrow.c6{grid-template-columns:52px 1fr 44px 110px 36px 36px}
+.gbox{border:2px solid var(--ln);border-left:6px solid var(--c);border-radius:16px;padding:10px;margin-top:12px}
+.catrow.grow{padding-bottom:8px;border-bottom:1px dashed var(--ln);margin-bottom:8px}
+.catrow.grow .inp:not(.em){font-weight:900;font-size:16px}
+.gtot{font-size:12px;font-weight:700;text-align:center}
+.gchips+.gchips{margin-top:10px}
+.gchips small{display:block;font-size:12px;font-weight:800;color:var(--mu);margin-bottom:6px}
+.leg .clk{cursor:pointer;border-radius:8px;margin:-3px -6px;padding:3px 6px}
+.leg .clk:hover{background:var(--in)}
+.leg u{text-decoration:none;color:var(--mu);font-weight:900}
 .catrow .inp{padding:10px}
 .catrow input.em{text-align:center;font-size:20px;padding:6px}
 .catrow input[type=color]{width:44px;height:44px;border:0;padding:0;background:none;border-radius:12px;cursor:pointer}
-@media (max-width:520px){.catrow{grid-template-columns:48px 1fr 40px 36px}.catrow .pr{grid-column:2/4}}
+@media (max-width:520px){.catrow{grid-template-columns:48px 1fr 40px 36px}.catrow .pr{grid-column:2/4}
+  .catrow.c6{grid-template-columns:44px 1fr 40px 36px 36px}.catrow.c6 .pr{grid-column:2/4;grid-row:2}
+  .catrow.grow{grid-template-columns:44px 1fr 40px 36px}.gtot{display:none}.gbox{padding:8px}}
 .welcome ol{margin:10px 0 0;padding-left:20px;font-weight:700}
 .welcome li{margin:6px 0}
 .welcome li a{color:var(--azul);cursor:pointer;text-decoration:underline}
@@ -300,7 +312,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
    sin tocar la nube.
    ============================================================ */
 
-const VERSION_APP = '1.4';
+const VERSION_APP = '1.5';
 const SB_URL  = 'https://ojzcxwhoinmljospgmfp.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qemN4d2hvaW5tbGpvc3BnbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDY5MTYsImV4cCI6MjA5MzQ4MjkxNn0.jmvVP3weuclrBpQJb57BwmHD77Ofy4CDe43cnmiSFCk';
 const DEMO = /[?&]demo\b/.test(location.search);
@@ -329,20 +341,40 @@ const CATS_I = [
   ['otros','💰','Otros','#94a3b8']
 ];
 const mkCats = L => L.map(c => ({id:c[0], e:c[1], n:c[2], c:c[3], p:0}));
+// Grupos de categorías de gasto (General vs Detalle en el resumen). Cada categoría tiene `g` = id de su grupo.
+const GRUPOS_G = [
+  ['comida','🍽️','Comida y bebida','#f97316', ['super','comida']],
+  ['transporte','🚗','Transporte','#3b82f6', ['transporte']],
+  ['hogar','🏠','Hogar','#8b5cf6', ['casa','servicios','mascotas']],
+  ['entretenimiento','🎉','Entretenimiento','#ec4899', ['salidas','viajes','suscripciones']],
+  ['personal','🧍','Personal','#14b8a6', ['ropa','salud','educacion','regalos']],
+  ['otros','📦','Otros','#94a3b8', ['otros']]
+];
+const mkGrupos = () => GRUPOS_G.map(g => ({id:'g_' + g[0], e:g[1], n:g[2], c:g[3]}));
+function grupoInicial(catId){ const g = GRUPOS_G.find(g => g[4].includes(catId)); return 'g_' + (g ? g[0] : 'otros'); }
 
 function estadoVacio(){
-  return {v:1, movs:[], fijos:[], cats:mkCats(CATS_G), catsI:mkCats(CATS_I),
+  return {v:1, movs:[], fijos:[], grupos:mkGrupos(), cats:mkCats(CATS_G).map(c => Object.assign(c, {g: grupoInicial(c.id)})), catsI:mkCats(CATS_I),
     plan:{meses:12, infl:2.5, aumIng:2, ahorro:'', gastoVar:'', ingVar:'', recorte:0}, extras:[],
     ahorro:{inicial:0, desde:'', ajustes:[], metas:[]}, billeteras:[], transfs:[]};
 }
 function normalizar(d){
   const b = estadoVacio();
   if(!d || typeof d !== 'object') return b;
+  const grupos = Array.isArray(d.grupos) && d.grupos.length ? d.grupos : b.grupos;
+  const cats = Array.isArray(d.cats) && d.cats.length ? d.cats : b.cats;
+  // categorías sin grupo (datos de antes de los grupos) o con un grupo que ya no existe
+  cats.forEach(c => {
+    if(grupos.some(g => g.id === c.g)) return;
+    const ini = grupoInicial(c.id);
+    c.g = grupos.some(g => g.id === ini) ? ini : (grupos.find(g => g.id === 'g_otros') || grupos[grupos.length - 1]).id;
+  });
   return {
     v:1,
     movs:   Array.isArray(d.movs) ? d.movs : [],
     fijos:  Array.isArray(d.fijos) ? d.fijos : [],
-    cats:   Array.isArray(d.cats) && d.cats.length ? d.cats : b.cats,
+    grupos,
+    cats,
     catsI:  Array.isArray(d.catsI) && d.catsI.length ? d.catsI : b.catsI,
     plan:   Object.assign(b.plan, d.plan || {}),
     extras: Array.isArray(d.extras) ? d.extras : [],
@@ -415,6 +447,14 @@ function totales(m){
   movsMes(m).forEach(x => { if(x.t === 'g') gv += x.monto; else iv += x.monto; });
   const gf = suma(fijosMes(m, 'g'), x => x.monto), fi = suma(fijosMes(m, 'i'), x => x.monto);
   return {gv, iv, gf, fi, g: gv + gf, i: iv + fi, b: iv + fi - gv - gf};
+}
+function grupoDe(cat){
+  return S.grupos.find(g => g.id === (cat && cat.g)) || S.grupos.find(g => g.id === 'g_otros') || {id:'g_otros', e:'📦', n:'Otros', c:'#94a3b8'};
+}
+function porGrupo(m){
+  const o = {};
+  porCat(m).forEach(x => { const g = grupoDe(x.cat); (o[g.id] = o[g.id] || {cat: g, v: 0}).v += x.v; });
+  return Object.values(o).sort((a, b) => b.v - a.v);
 }
 function porCat(m){
   const o = {};
@@ -528,7 +568,7 @@ function toast(msg){
 /* ============================================================
    Gráficos (SVG a mano)
    ============================================================ */
-function donut(items, total){
+function donut(items, total, alTocar){
   if(!total) return '<div class="vacio">Todavía no hay gastos este mes 🎉</div>';
   let acc = 0;
   const segs = items.map(it => {
@@ -537,7 +577,7 @@ function donut(items, total){
     acc += p; return s;
   }).join('');
   const top = items.slice(0, 7), resto = items.slice(7);
-  const leg = top.map(it => '<div><i style="background:'+it.cat.c+'"></i><span>'+it.cat.e+' '+esc(it.cat.n)+'</span><b>'+plata(it.v)+'</b><em>'+Math.round(it.v/total*100)+'%</em></div>').join('') +
+  const leg = top.map(it => '<div'+(alTocar ? ' class="clk" onclick="'+alTocar+'(\''+it.cat.id+'\')"' : '')+'><i style="background:'+it.cat.c+'"></i><span>'+it.cat.e+' '+esc(it.cat.n)+'</span><b>'+plata(it.v)+'</b><em>'+Math.round(it.v/total*100)+'%</em>'+(alTocar ? '<u>›</u>' : '')+'</div>').join('') +
     (resto.length ? '<div><i style="background:var(--ln)"></i><span>➕ '+resto.length+' más</span><b>'+plata(suma(resto, x => x.v))+'</b><em>'+Math.round(suma(resto, x => x.v)/total*100)+'%</em></div>' : '');
   return '<div class="donut-wrap"><svg viewBox="0 0 42 42" class="donut"><circle r="15.915" cx="21" cy="21" fill="none" stroke="var(--ln)" stroke-width="6"/>'+segs+
     '<text x="21" y="20">'+'<tspan class="d1">Gastaste</tspan></text><text x="21" y="26" class="d2">'+corto(total)+'</text></svg><div class="leg">'+leg+'</div></div>';
@@ -673,7 +713,7 @@ function vResumen(){
   if(S.billeteras.length) h += '<div class="bstrip">'+S.billeteras.map(b => { const s = saldoBill(b), tj = b.tipo === 'tarjeta'; return '<button onclick="irTab(\'billeteras\')"><small>'+esc(b.e)+' '+esc(b.nombre)+'</small><b class="'+(s < 0 ? 'neg' : '')+'">'+(tj ? (s < 0 ? 'Debés '+plata(-s) : '✅ Al día') : plata(s))+'</b></button>'; }).join('')+'</div>';
 
   h += '<div class="cols"><div class="stack">';
-  h += '<div class="card"><h2>🍩 ¿En qué se fue la plata?</h2>'+donut(pc, T.g)+'</div>';
+  h += cardCategorias(pc, T.g);
   h += '<div class="card"><h2>📈 Últimos 6 meses</h2>'+barrasMeses(meses6)+'</div>';
   const gvDias = movsMes(MES).filter(x => x.t === 'g');
   let ritmo = '';
@@ -701,6 +741,26 @@ function vResumen(){
     (ult.length ? ult.map(filaMov).join('') : '<div class="vacio">Nada anotado este mes.<br>Tocá el <b>+</b> para empezar ✍️</div>')+'</div>';
   h += '</div></div></div>';
   return h;
+}
+
+// General = por grupo (tocás uno y ves su detalle); Detalle = por categoría
+let VISTA_CAT = 'grupo', GRUPO_SEL = null;
+try{ VISTA_CAT = localStorage.getItem('gastos_vista') || 'grupo'; }catch(e){}
+function setVista(v){ VISTA_CAT = v; GRUPO_SEL = null; try{ localStorage.setItem('gastos_vista', v); }catch(e){} render(); }
+function verGrupo(id){ VISTA_CAT = 'detalle'; GRUPO_SEL = id; render(); }
+function cardCategorias(pc, total){
+  let items = pc, tot = total, g = null;
+  if(VISTA_CAT === 'grupo') items = porGrupo(MES);
+  else if(GRUPO_SEL){
+    g = S.grupos.find(x => x.id === GRUPO_SEL);
+    items = pc.filter(x => grupoDe(x.cat).id === GRUPO_SEL); tot = suma(items, x => x.v);
+  }
+  return '<div class="card"><h2>🍩 ¿En qué se fue la plata?</h2>'+
+    '<div class="seg" style="margin-bottom:14px">'+[['grupo','🗂️ General'],['detalle','🔍 Detalle']].map(v =>
+      '<button class="'+(VISTA_CAT === v[0] ? 'on' : '')+'" onclick="setVista(\''+v[0]+'\')">'+v[1]+'</button>').join('')+'</div>'+
+    (g ? '<button class="chip on" style="--c:'+g.c+';margin-bottom:12px" onclick="setVista(\'grupo\')">← '+g.e+' '+esc(g.n)+' · '+plata(tot)+'</button>' : '')+
+    donut(items, tot, VISTA_CAT === 'grupo' ? 'verGrupo' : null)+
+    (VISTA_CAT === 'grupo' && items.length ? '<p class="mu" style="font-size:12px;margin:10px 0 0;font-weight:700">Tocá un grupo para ver el detalle 👆</p>' : '')+'</div>';
 }
 
 function bienvenida(){
@@ -731,7 +791,7 @@ function lista(){
   const L = movsMes(MES).filter(x => FILTRO === 'todos' || x.t === FILTRO).filter(x => {
     if(!q) return true;
     const c = catDe(x.t, x.cat);
-    return (x.desc + ' ' + c.n).toLowerCase().includes(q);
+    return (x.desc + ' ' + c.n + (x.t === 'g' ? ' ' + grupoDe(c).n : '')).toLowerCase().includes(q);
   }).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.ts || 0) - (a.ts || 0));
   if(!L.length) return '<div class="vacio">'+(q ? 'No encontré nada con "'+esc(BUSCA)+'" 🤷' : 'Nada anotado en '+mesLabel(MES).toLowerCase()+' todavía ✍️')+'</div>';
   let h = '', dia = '';
@@ -1243,14 +1303,13 @@ function vAjustes(){
   const L = CATTAB === 'i' ? S.catsI : S.cats;
   return '<div class="cols"><div class="card"><h2>🏷️ Categorías</h2>'+
     '<div class="seg" style="margin-bottom:14px">'+[['g','💸 De gastos'],['i','💰 De ingresos']].map(t => '<button class="'+(CATTAB === t[0] ? 'on '+t[0] : '')+'" onclick="CATTAB=\''+t[0]+'\';render()">'+t[1]+'</button>').join('')+'</div>'+
-    (CATTAB === 'g' ? '<p class="mu" style="margin:-4px 0 12px;font-size:13px;font-weight:600">🎯 Poné un presupuesto mensual y en el resumen ves cuánto te queda.</p>' : '')+
-    L.map((c, k) => '<div class="catrow">'+
+    (CATTAB === 'g' ? editorGrupos() : L.map((c, k) => '<div class="catrow">'+
       '<input class="inp em" value="'+esc(c.e)+'" maxlength="4" onchange="setCat('+k+',\'e\',this.value)">'+
       '<input class="inp" value="'+esc(c.n)+'" onchange="setCat('+k+',\'n\',this.value)">'+
       '<input type="color" value="'+esc(c.c)+'" onchange="setCat('+k+',\'c\',this.value)">'+
-      (CATTAB === 'g' ? '<input class="inp pr" inputmode="decimal" placeholder="🎯 Presup." value="'+(+c.p ? NF.format(c.p) : '')+'" title="Presupuesto mensual" onchange="setCat('+k+',\'p\',this.value)">' : '<span></span>')+
+      '<span></span>'+
       '<button class="x" onclick="borrarCat('+k+')" title="Borrar">🗑️</button></div>').join('')+
-    '<button class="btn full" style="margin-top:14px" onclick="agregarCat()">➕ Nueva categoría</button></div>'+
+    '<button class="btn full" style="margin-top:14px" onclick="agregarCat()">➕ Nueva categoría</button>')+'</div>'+
     '<div class="stack"><div class="card"><h2>💾 Tus datos</h2>'+
     '<p class="mu" style="margin:0 0 12px;font-weight:600">'+S.movs.length+' movimientos · '+S.fijos.length+' fijos</p>'+
     '<div class="grid g2"><button class="btn" onclick="exportarCSV()">📄 Exportar CSV</button><button class="btn" onclick="exportarJSON()">📦 Backup</button></div>'+
@@ -1267,11 +1326,60 @@ function setCat(k, campo, v){
   if(campo === 'n' && !v.trim()) return render();
   L[k][campo] = v; save(); render();
 }
-function agregarCat(){
+function agregarCat(gid){
   const L = CATTAB === 'i' ? S.catsI : S.cats;
   const cols = ['#22c55e','#3b82f6','#f97316','#8b5cf6','#ec4899','#14b8a6','#eab308','#ef4444'];
-  L.push({id: 'c' + uid(), e: '✨', n: 'Nueva', c: cols[L.length % cols.length], p: 0});
+  const c = {id: 'c' + uid(), e: '✨', n: 'Nueva', c: cols[L.length % cols.length], p: 0};
+  if(CATTAB === 'g') c.g = gid || S.grupos[0].id;
+  L.push(c);
   save(); render();
+}
+
+/* grupos de categorías (solo gastos) */
+function editorGrupos(){
+  return '<p class="mu" style="margin:-4px 0 4px;font-size:13px;font-weight:600">🗂️ Los grupos son la vista "General" del resumen. 📂 mueve una categoría a otro grupo. 🎯 es el presupuesto mensual.</p>'+
+    S.grupos.map((g, gi) => {
+      const cs = S.cats.map((c, k) => ({c, k})).filter(x => grupoDe(x.c).id === g.id);
+      return '<div class="gbox" style="--c:'+g.c+'"><div class="catrow grow">'+
+        '<input class="inp em" value="'+esc(g.e)+'" maxlength="4" onchange="setGrupo('+gi+',\'e\',this.value)">'+
+        '<input class="inp" value="'+esc(g.n)+'" onchange="setGrupo('+gi+',\'n\',this.value)">'+
+        '<input type="color" value="'+esc(g.c)+'" onchange="setGrupo('+gi+',\'c\',this.value)">'+
+        '<span class="mu gtot">'+cs.length+' cat.</span>'+
+        '<button class="x" onclick="borrarGrupo('+gi+')" title="Borrar grupo">🗑️</button></div>'+
+        cs.map(({c, k}) => '<div class="catrow c6">'+
+          '<input class="inp em" value="'+esc(c.e)+'" maxlength="4" onchange="setCat('+k+',\'e\',this.value)">'+
+          '<input class="inp" value="'+esc(c.n)+'" onchange="setCat('+k+',\'n\',this.value)">'+
+          '<input type="color" value="'+esc(c.c)+'" onchange="setCat('+k+',\'c\',this.value)">'+
+          '<input class="inp pr" inputmode="decimal" placeholder="🎯 Presup." value="'+(+c.p ? NF.format(c.p) : '')+'" title="Presupuesto mensual" onchange="setCat('+k+',\'p\',this.value)">'+
+          '<button class="x" onclick="moverCat('+k+')" title="Mover a otro grupo">📂</button>'+
+          '<button class="x" onclick="borrarCat('+k+')" title="Borrar">🗑️</button></div>').join('')+
+        '<button class="btn sm" style="margin-top:8px" onclick="agregarCat(\''+g.id+'\')">➕ Categoría en '+esc(g.n)+'</button></div>';
+    }).join('')+
+    '<button class="btn full" style="margin-top:14px" onclick="agregarGrupo()">🗂️ Nuevo grupo</button>';
+}
+function setGrupo(i, campo, v){
+  if(campo === 'n' && !v.trim()) return render();
+  S.grupos[i][campo] = v; save(); render();
+}
+function agregarGrupo(){
+  const cols = ['#ec4899','#0ea5e9','#f97316','#22c55e','#8b5cf6','#eab308'];
+  S.grupos.push({id: 'g_' + uid(), e: '🗂️', n: 'Nuevo grupo', c: cols[S.grupos.length % cols.length]});
+  save(); render();
+}
+function borrarGrupo(i){
+  const g = S.grupos[i];
+  if(S.grupos.length <= 1) return toast('Necesitás al menos un grupo');
+  const destino = S.grupos.find(x => x.id === 'g_otros' && x !== g) || S.grupos.find(x => x !== g);
+  const cs = S.cats.filter(c => grupoDe(c).id === g.id);
+  if(!confirm('¿Borrar el grupo "'+g.n+'"?' + (cs.length ? '\n\nSus '+cs.length+' categorías pasan a "'+destino.n+'". No se borra ningún gasto.' : ''))) return;
+  cs.forEach(c => c.g = destino.id);
+  S.grupos.splice(i, 1); save(); render();
+}
+function moverCat(k){
+  const c = S.cats[k];
+  abrirSheet('<div class="sh-h"><h3>📂 Mover '+esc(c.e)+' '+esc(c.n)+'</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<label class="lb">¿A qué grupo va?</label><div class="chips">'+S.grupos.map(g =>
+      '<button class="chip'+(grupoDe(c).id === g.id ? ' on' : '')+'" style="--c:'+g.c+'" onclick="S.cats['+k+'].g=\''+g.id+'\';save();cerrarSheet();render();toast(\'📂 Categoría movida\')">'+g.e+' '+esc(g.n)+'</button>').join('')+'</div>');
 }
 function borrarCat(k){
   const t = CATTAB, L = t === 'i' ? S.catsI : S.cats, c = L[k];
@@ -1321,8 +1429,12 @@ function abrirSheet(html){ document.getElementById('sheet-pn').innerHTML = html;
 function cerrarSheet(){ document.getElementById('sheet').classList.remove('on'); }
 document.addEventListener('keydown', e => { if(e.key === 'Escape') cerrarSheet(); });
 function chipsCat(t, sel, fn){
-  const L = t === 'i' ? S.catsI : S.cats;
-  return '<div class="chips">'+L.map(c => '<button class="chip'+(sel === c.id ? ' on' : '')+'" style="--c:'+c.c+'" onclick="'+fn+'(\''+c.id+'\')">'+c.e+' '+esc(c.n)+'</button>').join('')+'</div>';
+  const chip = c => '<button class="chip'+(sel === c.id ? ' on' : '')+'" style="--c:'+c.c+'" onclick="'+fn+'(\''+c.id+'\')">'+c.e+' '+esc(c.n)+'</button>';
+  if(t === 'i') return '<div class="chips">'+S.catsI.map(chip).join('')+'</div>';
+  return S.grupos.map(g => {
+    const cs = S.cats.filter(c => grupoDe(c).id === g.id);
+    return cs.length ? '<div class="gchips"><small>'+g.e+' '+esc(g.n)+'</small><div class="chips">'+cs.map(chip).join('')+'</div></div>' : '';
+  }).join('');
 }
 function montoIn(t, val, onEnter){
   return '<div class="monto-in '+t+'"><span>$</span><input id="f-monto" inputmode="decimal" placeholder="0" value="'+esc(val)+'" oninput="F.monto=this.value" onkeydown="if(event.key===\'Enter\')'+onEnter+'()"></div>';
