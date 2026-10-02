@@ -237,6 +237,12 @@ input[type=range]{width:100%;accent-color:var(--azul)}
 .catrow.grow .inp:not(.em){font-weight:900;font-size:16px}
 .gtot{font-size:12px;font-weight:700;text-align:center}
 .gchips+.gchips{margin-top:10px}
+.swb{width:100%;max-width:44px;height:40px;border-radius:12px;border:3px solid var(--card);box-shadow:0 0 0 1px var(--ln)}
+.paleta{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:16px;padding:6px}
+#sheet .pn{overflow-x:hidden}
+.sw{aspect-ratio:1;border-radius:50%;border:3px solid var(--card);box-shadow:0 0 0 1px var(--ln);transition:transform .1s}
+.sw:hover{transform:scale(1.1)}
+.sw.on{box-shadow:0 0 0 3px var(--tx);transform:scale(1.08)}
 .gchips small{display:block;font-size:12px;font-weight:800;color:var(--mu);margin-bottom:6px}
 .leg .clk{cursor:pointer;border-radius:8px;margin:-3px -6px;padding:3px 6px}
 .leg .clk:hover{background:var(--in)}
@@ -312,7 +318,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
    sin tocar la nube.
    ============================================================ */
 
-const VERSION_APP = '1.5';
+const VERSION_APP = '1.6';
 const SB_URL  = 'https://ojzcxwhoinmljospgmfp.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qemN4d2hvaW5tbGpvc3BnbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDY5MTYsImV4cCI6MjA5MzQ4MjkxNn0.jmvVP3weuclrBpQJb57BwmHD77Ofy4CDe43cnmiSFCk';
 const DEMO = /[?&]demo\b/.test(location.search);
@@ -1306,7 +1312,7 @@ function vAjustes(){
     (CATTAB === 'g' ? editorGrupos() : L.map((c, k) => '<div class="catrow">'+
       '<input class="inp em" value="'+esc(c.e)+'" maxlength="4" onchange="setCat('+k+',\'e\',this.value)">'+
       '<input class="inp" value="'+esc(c.n)+'" onchange="setCat('+k+',\'n\',this.value)">'+
-      '<input type="color" value="'+esc(c.c)+'" onchange="setCat('+k+',\'c\',this.value)">'+
+      botonColor(c.c, 'cat', k)+
       '<span></span>'+
       '<button class="x" onclick="borrarCat('+k+')" title="Borrar">🗑️</button></div>').join('')+
     '<button class="btn full" style="margin-top:14px" onclick="agregarCat()">➕ Nueva categoría</button>')+'</div>'+
@@ -1335,6 +1341,27 @@ function agregarCat(gid){
   save(); render();
 }
 
+/* colores: paleta para tocar en vez del selector del sistema */
+const PALETA = [
+  ['#ef4444','Rojo'], ['#f43f5e','Frutilla'], ['#ec4899','Rosa'], ['#d946ef','Fucsia'], ['#a855f7','Lila'], ['#8b5cf6','Violeta'],
+  ['#6366f1','Índigo'], ['#3b82f6','Azul'], ['#0ea5e9','Celeste'], ['#06b6d4','Turquesa'], ['#14b8a6','Verde agua'], ['#10b981','Esmeralda'],
+  ['#22c55e','Verde'], ['#84cc16','Lima'], ['#eab308','Amarillo'], ['#f59e0b','Mostaza'], ['#f97316','Naranja'], ['#ea580c','Mandarina'],
+  ['#a16207','Marrón'], ['#78716c','Piedra'], ['#94a3b8','Gris'], ['#475569','Pizarra'], ['#1e293b','Azul noche'], ['#000000','Negro']
+];
+function botonColor(col, tipo, i){
+  return '<button class="swb" style="background:'+esc(col)+'" onclick="elegirColor(\''+tipo+'\','+i+')" title="Cambiar color" aria-label="Cambiar color"></button>';
+}
+function elegirColor(tipo, i){
+  const obj = tipo === 'grupo' ? S.grupos[i] : (CATTAB === 'i' ? S.catsI : S.cats)[i];
+  abrirSheet('<div class="sh-h"><h3>🎨 Color de '+esc(obj.e)+' '+esc(obj.n)+'</h3><button class="x" onclick="cerrarSheet()">✕</button></div>'+
+    '<div class="paleta">'+PALETA.map(p =>
+      '<button class="sw'+(String(obj.c).toLowerCase() === p[0] ? ' on' : '')+'" style="background:'+p[0]+'" title="'+p[1]+'" aria-label="'+p[1]+'" onclick="ponerColor(\''+tipo+'\','+i+',\''+p[0]+'\')"></button>').join('')+'</div>');
+}
+function ponerColor(tipo, i, col){
+  (tipo === 'grupo' ? S.grupos[i] : (CATTAB === 'i' ? S.catsI : S.cats)[i]).c = col;
+  save(); cerrarSheet(); render(); toast('🎨 Color cambiado');
+}
+
 /* grupos de categorías (solo gastos) */
 function editorGrupos(){
   return '<p class="mu" style="margin:-4px 0 4px;font-size:13px;font-weight:600">🗂️ Los grupos son la vista "General" del resumen. 📂 mueve una categoría a otro grupo. 🎯 es el presupuesto mensual.</p>'+
@@ -1343,13 +1370,13 @@ function editorGrupos(){
       return '<div class="gbox" style="--c:'+g.c+'"><div class="catrow grow">'+
         '<input class="inp em" value="'+esc(g.e)+'" maxlength="4" onchange="setGrupo('+gi+',\'e\',this.value)">'+
         '<input class="inp" value="'+esc(g.n)+'" onchange="setGrupo('+gi+',\'n\',this.value)">'+
-        '<input type="color" value="'+esc(g.c)+'" onchange="setGrupo('+gi+',\'c\',this.value)">'+
+        botonColor(g.c, 'grupo', gi)+
         '<span class="mu gtot">'+cs.length+' cat.</span>'+
         '<button class="x" onclick="borrarGrupo('+gi+')" title="Borrar grupo">🗑️</button></div>'+
         cs.map(({c, k}) => '<div class="catrow c6">'+
           '<input class="inp em" value="'+esc(c.e)+'" maxlength="4" onchange="setCat('+k+',\'e\',this.value)">'+
           '<input class="inp" value="'+esc(c.n)+'" onchange="setCat('+k+',\'n\',this.value)">'+
-          '<input type="color" value="'+esc(c.c)+'" onchange="setCat('+k+',\'c\',this.value)">'+
+          botonColor(c.c, 'cat', k)+
           '<input class="inp pr" inputmode="decimal" placeholder="🎯 Presup." value="'+(+c.p ? NF.format(c.p) : '')+'" title="Presupuesto mensual" onchange="setCat('+k+',\'p\',this.value)">'+
           '<button class="x" onclick="moverCat('+k+')" title="Mover a otro grupo">📂</button>'+
           '<button class="x" onclick="borrarCat('+k+')" title="Borrar">🗑️</button></div>').join('')+
