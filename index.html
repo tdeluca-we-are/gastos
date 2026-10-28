@@ -276,6 +276,12 @@ input[type=range]{width:100%;accent-color:var(--azul)}
 .bill-s{font-size:26px;font-weight:900;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pill{flex:0 0 auto!important;margin-left:auto;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;background:var(--sv);color:var(--verde)}
 .pill.r{background:var(--sr);color:var(--rojo)}
+.pordia{display:flex;align-items:center;gap:14px}
+.pordia .pd-e{font-size:34px;line-height:1}
+.pordia .pd-l{font-size:13px;font-weight:800;color:var(--mu)}
+.pordia .pd-v{font-size:30px;font-weight:900;line-height:1.1;color:var(--verde)}
+.pordia.neg .pd-v{color:var(--rojo)}
+.pordia .pd-s{font-size:12px;font-weight:700;color:var(--mu);margin-top:2px}
 .bstrip{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px}
 .bstrip button{flex:0 0 auto;background:var(--card);box-shadow:var(--sombra);border-radius:16px;padding:10px 14px;text-align:left;min-width:140px}
 .bstrip small{display:block;color:var(--mu);font-weight:700;font-size:12px}
@@ -326,7 +332,7 @@ input[type=range]{width:100%;accent-color:var(--azul)}
    sin tocar la nube.
    ============================================================ */
 
-const VERSION_APP = '1.7';
+const VERSION_APP = '1.8';
 const SB_URL  = 'https://ojzcxwhoinmljospgmfp.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qemN4d2hvaW5tbGpvc3BnbWZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDY5MTYsImV4cCI6MjA5MzQ4MjkxNn0.jmvVP3weuclrBpQJb57BwmHD77Ofy4CDe43cnmiSFCk';
 const DEMO = /[?&]demo\b/.test(location.search);
@@ -699,6 +705,27 @@ function filaMov(x, sinFecha){
 }
 
 /* ----- 📊 Resumen ----- */
+// Cuánto podés gastar por día lo que queda del mes (contando hoy).
+// Con billeteras: plata de hoy − deuda de tarjetas − fijos que faltan pagar. Sin billeteras: lo que te queda en el mes.
+function cardPorDia(T, fp){
+  const hoy = new Date(), dias = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate() - hoy.getDate() + 1;
+  const falta = suma(fp, x => x.monto);
+  let libre, det;
+  if(S.billeteras.some(b => b.tipo === 'dinero')){
+    const dinero = suma(S.billeteras.filter(b => b.tipo === 'dinero'), saldoBill);
+    const deuda = -suma(S.billeteras.filter(b => b.tipo === 'tarjeta'), b => Math.min(0, saldoBill(b)));
+    libre = dinero - deuda - falta;
+    det = 'Tenés '+plata(dinero)+(deuda ? ' − '+plata(deuda)+' de tarjetas' : '')+(falta ? ' − '+plata(falta)+' de fijos por pagar' : '')+' = '+plata(libre);
+  } else {
+    libre = T.b;
+    det = 'Lo que te queda en el mes: '+plata(libre);
+  }
+  const xd = libre / dias;
+  return '<div class="card pordia'+(xd < 0 ? ' neg' : '')+'"><div class="pd-e">📅</div><div style="min-width:0">'+
+    '<div class="pd-l">Podés gastar por día</div>'+
+    '<div class="pd-v">'+(xd < 0 ? '−'+plata(-xd) : plata(xd))+'</div>'+
+    '<div class="pd-s">'+det+' ÷ '+dias+' día'+(dias === 1 ? '' : 's')+' que quedan'+(xd < 0 ? ' · ⚠️ estás en rojo' : '')+'</div></div></div>';
+}
 function vResumen(){
   if(!hayDatos()) return bienvenida();
   const T = totales(MES), prev = totales(mesSum(MES, -1));
@@ -718,6 +745,8 @@ function vResumen(){
     '<div class="big">'+plata(T.b)+'</div>'+
     '<div class="bar"><i style="width:'+usado.toFixed(1)+'%"></i></div>'+
     '<div class="sub">Gastaste el '+(T.i ? Math.round(T.g / T.i * 100) : 0)+'% de lo que entró · '+(T.b >= 0 ? 'ahorrás el '+pct+'% 🐷' : 'estás gastando de más')+'</div></div>';
+
+  if(esActual) h += cardPorDia(T, fp);
 
   h += '<div class="grid g4">'+
     kpi('💰','var(--sv)','Ingresos', plata(T.i), 'fijos '+corto(T.fi)+' · extra '+corto(T.iv))+
